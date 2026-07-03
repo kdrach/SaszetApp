@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #10b981;
+  --color-secondary: #3b82f6;
+  --color-warning: #ef4444;
+  --color-background: #f2f2f7;
+  --color-surface: #ffffff;
+}
+
+body {
+  background-color: var(--color-background);
+  color: #111827; /* Gray 900 */
+}
