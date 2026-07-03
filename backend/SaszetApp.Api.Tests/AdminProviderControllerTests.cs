@@ -274,6 +274,48 @@ namespace SaszetApp.Api.Tests
             Assert.True(capturedRequest.Headers.Contains("x-goog-api-key"));
             Assert.Equal("secret", capturedRequest.Headers.GetValues("x-goog-api-key").First());
         }
+
+        [Fact]
+        public async Task TestConnection_Anthropic_SetsHeadersCorrectly()
+        {
+            // Arrange
+            var provider = new LlmProviderEntity
+            {
+                Id = Guid.NewGuid(),
+                ProviderName = "Anthropic",
+                EncryptedApiKey = "enc_secret"
+            };
+            _dbContext.LlmProviders.Add(provider);
+            await _dbContext.SaveChangesAsync();
+
+            System.Net.Http.HttpRequestMessage capturedRequest = null;
+            var mockHandler = new Mock<System.Net.Http.HttpMessageHandler>();
+            mockHandler
+               .Protected()
+               .Setup<Task<System.Net.Http.HttpResponseMessage>>(
+                  "SendAsync",
+                  ItExpr.IsAny<System.Net.Http.HttpRequestMessage>(),
+                  ItExpr.IsAny<System.Threading.CancellationToken>()
+               )
+               .Callback<System.Net.Http.HttpRequestMessage, System.Threading.CancellationToken>((r, c) => capturedRequest = r)
+               .ReturnsAsync(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK));
+
+            var client = new System.Net.Http.HttpClient(mockHandler.Object);
+            _mockHttpClientFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(client);
+
+            // Act
+            var result = await _controller.TestConnection(provider.Id);
+
+            // Assert
+            Assert.IsType<OkObjectResult>(result);
+            Assert.NotNull(capturedRequest);
+            Assert.Equal("https://api.anthropic.com/v1/models", capturedRequest.RequestUri.ToString());
+            Assert.True(capturedRequest.Headers.Contains("x-api-key"));
+            Assert.Equal("secret", capturedRequest.Headers.GetValues("x-api-key").First());
+            Assert.True(capturedRequest.Headers.Contains("anthropic-version"));
+            Assert.Equal("2023-06-01", capturedRequest.Headers.GetValues("anthropic-version").First());
+        }
+
         public void Dispose()
         {
             _dbContext.Database.EnsureDeleted();
