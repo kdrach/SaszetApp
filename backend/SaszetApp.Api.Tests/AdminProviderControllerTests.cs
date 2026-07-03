@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Moq;
 using SaszetApp.Api.Controllers;
 using SaszetApp.Api.Data;
@@ -16,25 +17,33 @@ namespace SaszetApp.Api.Tests
 {
     public class AdminProviderControllerTests : IDisposable
     {
+        private readonly SqliteConnection _connection;
         private readonly AppDbContext _dbContext;
         private readonly ILlmProviderModelMapper _mapper;
         private readonly Mock<IEncryptionService> _mockEncryption;
+        private readonly Mock<System.Net.Http.IHttpClientFactory> _mockHttpClientFactory;
         private readonly AdminProviderController _controller;
 
         public AdminProviderControllerTests()
         {
+            _connection = new SqliteConnection("DataSource=:memory:");
+            _connection.Open();
+
             var options = new DbContextOptionsBuilder<AppDbContext>()
-                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .UseSqlite(_connection)
                 .Options;
 
             _dbContext = new AppDbContext(options);
+            _dbContext.Database.EnsureCreated();
+            
             _mapper = new LlmProviderModelMapper();
             _mockEncryption = new Mock<IEncryptionService>();
+            _mockHttpClientFactory = new Mock<System.Net.Http.IHttpClientFactory>();
             
             _mockEncryption.Setup(e => e.Encrypt(It.IsAny<string>())).Returns((string s) => "enc_" + s);
             _mockEncryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns((string s) => s.Replace("enc_", ""));
 
-            _controller = new AdminProviderController(_dbContext, _mapper, _mockEncryption.Object);
+            _controller = new AdminProviderController(_dbContext, _mapper, _mockEncryption.Object, _mockHttpClientFactory.Object);
         }
 
         [Fact]
@@ -88,6 +97,7 @@ namespace SaszetApp.Api.Tests
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
             
+            _dbContext.ChangeTracker.Clear();
             var dbOld = await _dbContext.LlmProviders.FindAsync(existing.Id);
             Assert.False(dbOld.IsPrimary);
             
@@ -101,6 +111,7 @@ namespace SaszetApp.Api.Tests
         {
             _dbContext.Database.EnsureDeleted();
             _dbContext.Dispose();
+            _connection.Dispose();
         }
     }
 }

@@ -19,6 +19,7 @@ namespace SaszetApp.Api.Data
             {
                 entity.ToTable("PetFoodItems");
                 entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.EanCode, e.Language }).IsUnique();
                 entity.HasIndex(e => e.EanCode);
                 entity.HasIndex(e => e.ProductName);
                 entity.HasIndex(e => e.Language);

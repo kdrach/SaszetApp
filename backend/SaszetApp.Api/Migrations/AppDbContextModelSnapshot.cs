@@ -98,6 +98,9 @@ namespace SaszetApp.Api.Migrations
 
                     b.HasIndex("ProductName");
 
+                    b.HasIndex("EanCode", "Language")
+                        .IsUnique();
+
                     b.ToTable("PetFoodItems", (string)null);
                 });
 #pragma warning restore 612, 618

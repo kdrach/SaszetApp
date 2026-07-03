@@ -32,8 +32,34 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuer = true,
             ValidateAudience = false,
             ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            RoleClaimType = "realm_access.roles" // Map keycloak roles
+            ValidateIssuerSigningKey = true
+        };
+        
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                if (context.Principal?.Identity is ClaimsIdentity identity)
+                {
+                    var realmAccessClaim = identity.FindFirst("realm_access");
+                    if (realmAccessClaim != null)
+                    {
+                        try
+                        {
+                            using var doc = System.Text.Json.JsonDocument.Parse(realmAccessClaim.Value);
+                            if (doc.RootElement.TryGetProperty("roles", out var rolesElement))
+                            {
+                                foreach (var role in rolesElement.EnumerateArray())
+                                {
+                                    identity.AddClaim(new Claim(ClaimTypes.Role, role.GetString()));
+                                }
+                            }
+                        }
+                        catch { /* Ignore parsing errors */ }
+                    }
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 

@@ -4,6 +4,11 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using SaszetApp.Api.Data;
@@ -48,18 +53,12 @@ namespace SaszetApp.Api.Services
 
             string jsonResponse = await CallProviderAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, systemPrompt, query);
 
-            if (jsonResponse.StartsWith("```json"))
+            var match = Regex.Match(jsonResponse, @"(?is)```(?:json)?\s*(.*?)\s*```");
+            if (match.Success) 
             {
-                jsonResponse = jsonResponse.Substring(7);
+                jsonResponse = match.Groups[1].Value;
             }
-            if (jsonResponse.StartsWith("```"))
-            {
-                jsonResponse = jsonResponse.Substring(3);
-            }
-            if (jsonResponse.EndsWith("```"))
-            {
-                jsonResponse = jsonResponse.Substring(0, jsonResponse.Length - 3);
-            }
+            
             jsonResponse = jsonResponse.Trim();
 
             var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });

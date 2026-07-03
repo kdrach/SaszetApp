@@ -11,6 +11,7 @@ namespace SaszetApp.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
     public class ScanController : ControllerBase
     {
         private readonly AppDbContext _dbContext;
@@ -31,6 +32,7 @@ namespace SaszetApp.Api.Controllers
             {
                 return BadRequest("Query must be at least 3 characters long.");
             }
+            if (query.Length > 100) return BadRequest("Too long");
 
             var language = Request.Headers["Accept-Language"].ToString()?.Split(',').FirstOrDefault()?.Trim().ToLower() ?? "pl";
             if (!language.StartsWith("en") && !language.StartsWith("pl"))
