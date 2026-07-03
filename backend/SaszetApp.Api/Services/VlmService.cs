@@ -48,6 +48,20 @@ namespace SaszetApp.Api.Services
 
             string jsonResponse = await CallProviderAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, systemPrompt, query);
 
+            if (jsonResponse.StartsWith("```json"))
+            {
+                jsonResponse = jsonResponse.Substring(7);
+            }
+            if (jsonResponse.StartsWith("```"))
+            {
+                jsonResponse = jsonResponse.Substring(3);
+            }
+            if (jsonResponse.EndsWith("```"))
+            {
+                jsonResponse = jsonResponse.Substring(0, jsonResponse.Length - 3);
+            }
+            jsonResponse = jsonResponse.Trim();
+
             var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (vlmResponse == null) throw new InvalidOperationException("Failed to parse VLM response.");
 

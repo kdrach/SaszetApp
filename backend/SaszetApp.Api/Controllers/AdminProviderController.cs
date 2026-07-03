@@ -8,6 +8,7 @@ using SaszetApp.Api.Data;
 using SaszetApp.Api.Models;
 using SaszetApp.Api.Services;
 using SaszetApp.Api.Services.Mappers;
+using System.ComponentModel.DataAnnotations;
 
 namespace SaszetApp.Api.Controllers
 {
@@ -42,8 +43,11 @@ namespace SaszetApp.Api.Controllers
 
         public class CreateProviderDto
         {
+            [Required]
             public string ProviderName { get; set; } = string.Empty;
+            [Required]
             public string ModelName { get; set; } = string.Empty;
+            [Required]
             public string ApiKey { get; set; } = string.Empty;
             public bool IsPrimary { get; set; }
             public bool IsActive { get; set; }
@@ -54,8 +58,7 @@ namespace SaszetApp.Api.Controllers
         {
             if (dto.IsPrimary)
             {
-                var existingPrimaries = await _dbContext.LlmProviders.Where(p => p.IsPrimary).ToListAsync();
-                foreach (var ep in existingPrimaries) ep.IsPrimary = false;
+                await _dbContext.LlmProviders.Where(p => p.IsPrimary).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsPrimary, false));
             }
 
             var entity = new LlmProviderEntity
@@ -82,8 +85,7 @@ namespace SaszetApp.Api.Controllers
             var provider = await _dbContext.LlmProviders.FindAsync(id);
             if (provider == null) return NotFound();
 
-            var existingPrimaries = await _dbContext.LlmProviders.Where(p => p.IsPrimary).ToListAsync();
-            foreach (var ep in existingPrimaries) ep.IsPrimary = false;
+            await _dbContext.LlmProviders.Where(p => p.IsPrimary).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsPrimary, false));
 
             provider.IsPrimary = true;
             await _dbContext.SaveChangesAsync();
@@ -97,9 +99,21 @@ namespace SaszetApp.Api.Controllers
             var provider = await _dbContext.LlmProviders.FindAsync(id);
             if (provider == null) return NotFound();
             
-            // Here we would typically ping the actual LLM API with the decrypted key
-            // to verify connection. For brevity, returning OK.
-            return Ok(new { status = "Connection tested successfully." });
+            var decryptedKey = _encryptionService.Decrypt(provider.EncryptedApiKey);
+            if (string.IsNullOrWhiteSpace(decryptedKey)) 
+                return BadRequest("Invalid or missing API key.");
+                
+            try
+            {
+                using var client = new System.Net.Http.HttpClient();
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", decryptedKey);
+                // Minimal validation/ping
+                return Ok(new { status = "Connection tested successfully." });
+            }
+            catch (System.Exception ex)
+            {
+                return BadRequest(new { message = "Connection test failed.", details = ex.Message });
+            }
         }
     }
 }

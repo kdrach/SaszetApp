@@ -27,9 +27,9 @@ namespace SaszetApp.Api.Controllers
         [HttpGet("search")]
         public async Task<IActionResult> Search([FromQuery] string query)
         {
-            if (string.IsNullOrWhiteSpace(query))
+            if (string.IsNullOrWhiteSpace(query) || query.Length < 3)
             {
-                return BadRequest("Query cannot be empty.");
+                return BadRequest("Query must be at least 3 characters long.");
             }
 
             var language = Request.Headers["Accept-Language"].ToString()?.Split(',').FirstOrDefault()?.Trim().ToLower() ?? "pl";
@@ -57,9 +57,9 @@ namespace SaszetApp.Api.Controllers
                 var result = await _vlmService.AnalyzeProductAsync(query, language);
                 return Ok(result);
             }
-            catch (System.Exception ex)
+            catch (System.Exception)
             {
-                return StatusCode(500, new { message = "Error analyzing product.", details = ex.Message });
+                return StatusCode(500, new { message = "Error analyzing product." });
             }
         }
     }
