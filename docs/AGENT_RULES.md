@@ -8,7 +8,7 @@ This document defines your technical boundaries, libraries, and coding standards
 
 1.1 Backend (C# / .NET)
 
-Framework: .NET 8.0 (or newer) using ASP.NET Core Web API.
+Framework: .NET 10.0 (or newer) using ASP.NET Core Web API.
 
 Architecture: Use Minimal APIs (Program.cs) for routing, or a clean Controller-based approach. Prefer a Vertical Slice Architecture or clean folder structure (e.g., /Features, /Data, /Services).
 
