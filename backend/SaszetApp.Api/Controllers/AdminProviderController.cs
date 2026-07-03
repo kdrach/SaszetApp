@@ -64,7 +64,11 @@ namespace SaszetApp.Api.Controllers
             {
                 if (dto.IsPrimary)
                 {
-                    await _dbContext.LlmProviders.Where(p => p.IsPrimary).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsPrimary, false));
+                    var currentPrimary = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary);
+                    if (currentPrimary != null)
+                    {
+                        currentPrimary.IsPrimary = false;
+                    }
                 }
 
                 var entity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.ProviderName == dto.ProviderName);
@@ -80,6 +84,10 @@ namespace SaszetApp.Api.Controllers
                 }
                 else
                 {
+                    if (dto.ApiKey == "KEEP_EXISTING")
+                    {
+                        return BadRequest("Cannot use KEEP_EXISTING for a new provider.");
+                    }
                     entity = new LlmProviderEntity
                     {
                         Id = Guid.NewGuid(),
@@ -114,7 +122,11 @@ namespace SaszetApp.Api.Controllers
                 var provider = await _dbContext.LlmProviders.FindAsync(id);
                 if (provider == null) return NotFound();
 
-                await _dbContext.LlmProviders.Where(p => p.IsPrimary).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsPrimary, false));
+                var currentPrimary = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary);
+                if (currentPrimary != null)
+                {
+                    currentPrimary.IsPrimary = false;
+                }
 
                 provider.IsPrimary = true;
                 await _dbContext.SaveChangesAsync();
@@ -146,7 +158,7 @@ namespace SaszetApp.Api.Controllers
                 string url = provider.ProviderName switch
                 {
                     "Anthropic" => "https://api.anthropic.com/v1/models",
-                    "Gemini" => $"https://generativelanguage.googleapis.com/v1beta/models?key={decryptedKey}",
+                    "Gemini" => "https://generativelanguage.googleapis.com/v1beta/models",
                     _ => "https://api.openai.com/v1/models"
                 };
 
@@ -155,7 +167,11 @@ namespace SaszetApp.Api.Controllers
                     client.DefaultRequestHeaders.Add("x-api-key", decryptedKey);
                     client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
                 }
-                else if (provider.ProviderName != "Gemini")
+                else if (provider.ProviderName == "Gemini")
+                {
+                    client.DefaultRequestHeaders.Add("x-goog-api-key", decryptedKey);
+                }
+                else
                 {
                     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", decryptedKey);
                 }
