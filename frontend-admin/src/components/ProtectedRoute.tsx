@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+
 import { useKeycloak } from '@react-keycloak/web';
 
 interface ProtectedRouteProps {
@@ -9,8 +9,14 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { keycloak } = useKeycloak();
 
+  React.useEffect(() => {
+    if (!keycloak.authenticated) {
+      keycloak.login();
+    }
+  }, [keycloak]);
+
   if (!keycloak.authenticated) {
-    return <Navigate to="/" replace />;
+    return null;
   }
 
   return children;
