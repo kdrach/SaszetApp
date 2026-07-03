@@ -16,13 +16,13 @@ jobs:
           dotnet-version: '8.0.x'
           
       - name: Restore dependencies
-        run: dotnet restore || true
+        run: dotnet restore
         
       - name: Build
-        run: dotnet build --no-restore || true
+        run: dotnet build --no-restore
         
       - name: Test
-        run: dotnet test --no-build --verbosity normal || true
+        run: dotnet test --no-build --verbosity normal
 
   test-frontend:
     runs-on: ubuntu-latest
@@ -38,7 +38,7 @@ jobs:
         run: |
           if [ -f "package.json" ]; then
             npm ci
-            npm run test || true
+            npm run test
           else
             echo "No package.json found yet. Skipping frontend tests."
           fi
