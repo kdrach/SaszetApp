@@ -30,8 +30,9 @@ const AdminDashboardView: React.FC = () => {
     try {
       await providersApi.createProvider(data);
       await fetchProviders();
+      setError(null);
     } catch (err: any) {
-      alert('Error saving provider: ' + err.message);
+      setError('Error saving provider: ' + err.message);
     }
   };
 
@@ -48,18 +49,27 @@ const AdminDashboardView: React.FC = () => {
     try {
       await providersApi.setPrimary(id);
       await fetchProviders();
+      setError(null);
     } catch (err: any) {
-      alert('Error setting primary: ' + err.message);
+      setError('Error setting primary: ' + err.message);
     }
   };
 
   const primaryProvider = providers.find(p => p.isPrimary);
 
   if (loading) return <div className="text-gray-500">Loading configurations...</div>;
-  if (error) return <div className="text-red-500">Error: {error}</div>;
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      {error && (
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md shadow-sm flex justify-between items-center">
+          <div>
+            <p className="font-bold">Error</p>
+            <p>{error}</p>
+          </div>
+          <button onClick={() => setError(null)} className="text-2xl leading-none px-2 font-semibold hover:text-red-900">&times;</button>
+        </div>
+      )}
       {/* Global Route Selector Card */}
       <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl p-8 text-white shadow-lg flex items-center justify-between">
         <div>

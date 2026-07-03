@@ -64,20 +64,42 @@ namespace SaszetApp.Api.Controllers
             {
                 if (dto.IsPrimary)
                 {
-                    await _dbContext.LlmProviders.Where(p => p.IsPrimary).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsPrimary, false));
+                    var currentPrimary = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary);
+                    if (currentPrimary != null)
+                    {
+                        currentPrimary.IsPrimary = false;
+                    }
                 }
 
-                var entity = new LlmProviderEntity
+                var entity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.ProviderName == dto.ProviderName);
+                if (entity != null)
                 {
-                    Id = Guid.NewGuid(),
-                    ProviderName = dto.ProviderName,
-                    ModelName = dto.ModelName,
-                    EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey),
-                    IsPrimary = dto.IsPrimary,
-                    IsActive = dto.IsActive
-                };
+                    entity.ModelName = dto.ModelName;
+                    if (dto.ApiKey != "KEEP_EXISTING")
+                    {
+                        entity.EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey);
+                    }
+                    entity.IsPrimary = dto.IsPrimary;
+                    entity.IsActive = dto.IsActive;
+                }
+                else
+                {
+                    if (dto.ApiKey == "KEEP_EXISTING")
+                    {
+                        return BadRequest("Cannot use KEEP_EXISTING for a new provider.");
+                    }
+                    entity = new LlmProviderEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        ProviderName = dto.ProviderName,
+                        ModelName = dto.ModelName,
+                        EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey),
+                        IsPrimary = dto.IsPrimary,
+                        IsActive = dto.IsActive
+                    };
+                    _dbContext.LlmProviders.Add(entity);
+                }
 
-                _dbContext.LlmProviders.Add(entity);
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -101,7 +123,11 @@ namespace SaszetApp.Api.Controllers
                 var provider = await _dbContext.LlmProviders.FindAsync(id);
                 if (provider == null) return NotFound();
 
-                await _dbContext.LlmProviders.Where(p => p.IsPrimary).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsPrimary, false));
+                var currentPrimary = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary);
+                if (currentPrimary != null)
+                {
+                    currentPrimary.IsPrimary = false;
+                }
 
                 provider.IsPrimary = true;
                 await _dbContext.SaveChangesAsync();
@@ -129,9 +155,28 @@ namespace SaszetApp.Api.Controllers
             try
             {
                 using var client = _httpClientFactory.CreateClient();
-                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", decryptedKey);
-                // Minimal validation/ping
-                var response = await client.GetAsync("https://api.openai.com/v1/models");
+                string url = provider.ProviderName switch
+                {
+                    "Anthropic" => "https://api.anthropic.com/v1/models",
+                    "Gemini" => "https://generativelanguage.googleapis.com/v1beta/models",
+                    _ => "https://api.openai.com/v1/models"
+                };
+
+                if (provider.ProviderName == "Anthropic")
+                {
+                    client.DefaultRequestHeaders.Add("x-api-key", decryptedKey);
+                    client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+                }
+                else if (provider.ProviderName == "Gemini")
+                {
+                    client.DefaultRequestHeaders.Add("x-goog-api-key", decryptedKey);
+                }
+                else
+                {
+                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", decryptedKey);
+                }
+                
+                var response = await client.GetAsync(url);
                 response.EnsureSuccessStatusCode();
                 return Ok(new { status = "Connection tested successfully." });
             }
