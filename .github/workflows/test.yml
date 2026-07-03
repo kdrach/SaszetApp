@@ -1,0 +1,44 @@
+name: Unit & Integration Tests
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+          
+      - name: Restore dependencies
+        run: dotnet restore
+        
+      - name: Build
+        run: dotnet build --no-restore
+        
+      - name: Test
+        run: dotnet test --no-build --verbosity normal
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install and Test
+        run: |
+          if [ -f "package.json" ]; then
+            npm ci
+            npm run test
+          else
+            echo "No package.json found yet. Skipping frontend tests."
+          fi
