@@ -48,13 +48,6 @@ namespace SaszetApp.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("IsPrimary")
-                        .IsUnique()
-                        .HasFilter("\"IsPrimary\" = true");
-
-                    b.HasIndex("ProviderName")
-                        .IsUnique();
-
                     b.ToTable("LlmProviders", (string)null);
                 });
 

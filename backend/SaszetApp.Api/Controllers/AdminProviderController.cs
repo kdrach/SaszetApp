@@ -46,7 +46,7 @@ namespace SaszetApp.Api.Controllers
         public class CreateProviderDto
         {
             [Required]
-            [RegularExpression("^(OpenAI|Anthropic|Gemini)$")]
+            [RegularExpression("OpenAI|Anthropic|Gemini")]
             public string ProviderName { get; set; } = string.Empty;
             [Required]
             public string ModelName { get; set; } = string.Empty;
@@ -67,27 +67,17 @@ namespace SaszetApp.Api.Controllers
                     await _dbContext.LlmProviders.Where(p => p.IsPrimary).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsPrimary, false));
                 }
 
-                var entity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.ProviderName == dto.ProviderName);
-                if (entity != null)
+                var entity = new LlmProviderEntity
                 {
-                    entity.ModelName = dto.ModelName;
-                    entity.EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey);
-                    entity.IsPrimary = dto.IsPrimary;
-                    entity.IsActive = dto.IsActive;
-                }
-                else
-                {
-                    entity = new LlmProviderEntity
-                    {
-                        Id = Guid.NewGuid(),
-                        ProviderName = dto.ProviderName,
-                        ModelName = dto.ModelName,
-                        EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey),
-                        IsPrimary = dto.IsPrimary,
-                        IsActive = dto.IsActive
-                    };
-                    _dbContext.LlmProviders.Add(entity);
-                }
+                    Id = Guid.NewGuid(),
+                    ProviderName = dto.ProviderName,
+                    ModelName = dto.ModelName,
+                    EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey),
+                    IsPrimary = dto.IsPrimary,
+                    IsActive = dto.IsActive
+                };
+
+                _dbContext.LlmProviders.Add(entity);
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -139,26 +129,9 @@ namespace SaszetApp.Api.Controllers
             try
             {
                 using var client = _httpClientFactory.CreateClient();
-                
-                string url = provider.ProviderName switch
-                {
-                    "Anthropic" => "https://api.anthropic.com/v1/models",
-                    "Gemini" => $"https://generativelanguage.googleapis.com/v1beta/models?key={decryptedKey}",
-                    _ => "https://api.openai.com/v1/models"
-                };
-
-                if (provider.ProviderName == "Anthropic")
-                {
-                    client.DefaultRequestHeaders.Add("x-api-key", decryptedKey);
-                    client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
-                }
-                else if (provider.ProviderName != "Gemini")
-                {
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", decryptedKey);
-                }
-                
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", decryptedKey);
                 // Minimal validation/ping
-                var response = await client.GetAsync(url);
+                var response = await client.GetAsync("https://api.openai.com/v1/models");
                 response.EnsureSuccessStatusCode();
                 return Ok(new { status = "Connection tested successfully." });
             }
