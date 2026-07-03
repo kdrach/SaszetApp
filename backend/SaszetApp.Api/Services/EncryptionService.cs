@@ -15,9 +15,9 @@ namespace SaszetApp.Api.Services
     {
         private readonly byte[] _key;
 
-        public EncryptionService()
+        public EncryptionService(Microsoft.Extensions.Configuration.IConfiguration configuration)
         {
-            var keyString = Environment.GetEnvironmentVariable("ENCRYPTION_KEY");
+            var keyString = configuration["ENCRYPTION_KEY"];
             if (string.IsNullOrEmpty(keyString))
             {
                 throw new InvalidOperationException("ENCRYPTION_KEY environment variable is not set.");
