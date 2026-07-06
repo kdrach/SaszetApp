@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: app-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER?Error: POSTGRES_USER is required}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?Error: POSTGRES_PASSWORD is required}
-      POSTGRES_DB: ${POSTGRES_DB?Error: POSTGRES_DB is required}
+      POSTGRES_USER: "${POSTGRES_USER?Error: POSTGRES_USER is required}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD?Error: POSTGRES_PASSWORD is required}"
+      POSTGRES_DB: "${POSTGRES_DB?Error: POSTGRES_DB is required}"
     ports:
       - "5434:5432"
     volumes:
@@ -21,9 +21,9 @@ services:
     image: postgres:16-alpine
     container_name: keycloak-db
     environment:
-      POSTGRES_USER: ${KEYCLOAK_USER?Error: KEYCLOAK_USER is required}
-      POSTGRES_PASSWORD: ${KEYCLOAK_PASSWORD?Error: KEYCLOAK_PASSWORD is required}
-      POSTGRES_DB: ${KEYCLOAK_DB?Error: KEYCLOAK_DB is required}
+      POSTGRES_USER: "${KEYCLOAK_USER?Error: KEYCLOAK_USER is required}"
+      POSTGRES_PASSWORD: "${KEYCLOAK_PASSWORD?Error: KEYCLOAK_PASSWORD is required}"
+      POSTGRES_DB: "${KEYCLOAK_DB?Error: KEYCLOAK_DB is required}"
     ports:
       - "5433:5432"
     volumes:
@@ -41,11 +41,11 @@ services:
     command: start-dev --import-realm
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KEYCLOAK_DB?Error: KEYCLOAK_DB is required}
-      KC_DB_USERNAME: ${KEYCLOAK_USER?Error: KEYCLOAK_USER is required}
-      KC_DB_PASSWORD: ${KEYCLOAK_PASSWORD?Error: KEYCLOAK_PASSWORD is required}
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN?Error: KEYCLOAK_ADMIN is required}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD?Error: KEYCLOAK_ADMIN_PASSWORD is required}
+      KC_DB_URL: "jdbc:postgresql://keycloak-db:5432/${KEYCLOAK_DB?Error: KEYCLOAK_DB is required}"
+      KC_DB_USERNAME: "${KEYCLOAK_USER?Error: KEYCLOAK_USER is required}"
+      KC_DB_PASSWORD: "${KEYCLOAK_PASSWORD?Error: KEYCLOAK_PASSWORD is required}"
+      KEYCLOAK_ADMIN: "${KEYCLOAK_ADMIN?Error: KEYCLOAK_ADMIN is required}"
+      KEYCLOAK_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD?Error: KEYCLOAK_ADMIN_PASSWORD is required}"
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
       KC_HOSTNAME_URL: http://localhost:8180
@@ -71,10 +71,10 @@ services:
     ports:
       - "5000:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Host=app-db;Database=${POSTGRES_DB?Error: POSTGRES_DB is required};Username=${POSTGRES_USER?Error: POSTGRES_USER is required};Password=${POSTGRES_PASSWORD?Error: POSTGRES_PASSWORD is required}
+      - "ConnectionStrings__DefaultConnection=Host=app-db;Database=${POSTGRES_DB?Error: POSTGRES_DB is required};Username=${POSTGRES_USER?Error: POSTGRES_USER is required};Password=${POSTGRES_PASSWORD?Error: POSTGRES_PASSWORD is required}"
       - Jwt__Authority=http://keycloak:8080/realms/petfood-realm
       - Jwt__ValidIssuer=http://localhost:8180/realms/petfood-realm
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY?Error: ENCRYPTION_KEY is required} # 32 bytes for AES-256
+      - "ENCRYPTION_KEY=${ENCRYPTION_KEY?Error: ENCRYPTION_KEY is required}" # 32 bytes for AES-256
       - ASPNETCORE_HTTP_PORTS=8080
     depends_on:
       app-db:
