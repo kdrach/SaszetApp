@@ -13,34 +13,60 @@ export default function ResultView() {
   const navigate = useNavigate();
   const addScan = useAppStore(state => state.addScan);
   
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!id);
   const [result, setResult] = useState<VLMResponseContract | null>(null);
   const [ingredientsExpanded, setIngredientsExpanded] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setLoading(false);
+      return;
+    }
     
+    let ignore = false;
     setLoading(true);
+    
     fetchAnalysisResult(id, i18n.language)
       .then(res => {
-        setResult(res);
-        addScan({
-          id: Date.now().toString(),
-          query: id,
-          timestamp: Date.now(),
-          result: res
-        });
+        if (!ignore) {
+          setResult(res);
+          addScan({
+            id: Date.now().toString(),
+            query: id,
+            timestamp: Date.now(),
+            result: res
+          });
+        }
       })
       .catch(err => {
-        console.error(err);
+        if (!ignore) {
+          console.error(err);
+        }
       })
       .finally(() => {
-        setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+        }
       });
+      
+    return () => {
+      ignore = true;
+    };
   }, [id, i18n.language, addScan]);
 
   if (loading) {
     return <LoadingOverlay />;
+  }
+
+  if (!id) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6">
+        <p className="text-xl text-gray-500 mb-6 text-center">Invalid product ID.</p>
+        <button onClick={() => navigate(-1)} className="px-6 py-3 bg-[var(--color-primary)] text-white rounded-xl font-semibold shadow-lg active:scale-95 transition-transform">
+          Go Back
+        </button>
+      </div>
+    );
   }
 
   if (!result) {

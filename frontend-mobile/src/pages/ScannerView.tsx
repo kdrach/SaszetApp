@@ -13,11 +13,13 @@ export default function ScannerView() {
 
   useEffect(() => {
     let html5QrCode: Html5Qrcode;
+    let isMounted = true;
 
     const startCamera = async () => {
       try {
         const devices = await Html5Qrcode.getCameras();
         if (devices && devices.length) {
+          if (!isMounted) return;
           setHasPermission(true);
           html5QrCode = new Html5Qrcode("reader");
           
@@ -26,8 +28,7 @@ export default function ScannerView() {
               { facingMode: "environment" },
               { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
               (decodedText) => {
-                html5QrCode.stop();
-                navigate(`/product/${decodedText}`);
+                html5QrCode.stop().then(() => navigate(`/product/${decodedText}`)).catch(console.error);
               },
               () => {}
             );
@@ -41,6 +42,7 @@ export default function ScannerView() {
           }
         }
       } catch (err) {
+        if (!isMounted) return;
         console.error("Camera error:", err);
         setHasPermission(false);
       }
@@ -49,6 +51,7 @@ export default function ScannerView() {
     startCamera();
 
     return () => {
+      isMounted = false;
       if (html5QrCode && html5QrCode.isScanning) {
         html5QrCode.stop().catch(console.error);
       }

@@ -13,6 +13,7 @@ function App() {
             <Route path="/" element={<HomeView />} />
             <Route path="/scan" element={<ScannerView />} />
             <Route path="/product/:id" element={<ResultView />} />
+            <Route path="/profile" element={<div className="p-6 text-center text-gray-500 mt-20">Profile Placeholder</div>} />
           </Routes>
         </div>
         <BottomTabBar />
