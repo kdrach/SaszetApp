@@ -26,14 +26,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     {
         options.MetadataAddress = $"{builder.Configuration["Jwt:Authority"]}/.well-known/openid-configuration";
         options.RequireHttpsMetadata = false; // Internal Docker network
-        options.Audience = "account"; // Default Keycloak audience
+        options.Audience = "saszetapp-api"; // Custom Keycloak audience
         
         options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuer"] ?? builder.Configuration["Jwt:Authority"] },
             ValidateAudience = true,
-            ValidAudiences = new[] { "account" },
+            ValidAudiences = new[] { "saszetapp-api" },
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true
         };
@@ -54,7 +54,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                             {
                                 foreach (var role in rolesElement.EnumerateArray())
                                 {
-                                    identity.AddClaim(new Claim(ClaimTypes.Role, role.GetString()));
+                                    var roleStr = role.GetString();
+                                    if (!string.IsNullOrEmpty(roleStr))
+                                    {
+                                        identity.AddClaim(new Claim(ClaimTypes.Role, roleStr));
+                                    }
                                 }
                             }
                         }
