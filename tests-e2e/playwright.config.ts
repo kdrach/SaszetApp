@@ -7,7 +7,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3010',
+    baseURL: process.env.MOBILE_URL || 'http://localhost:3010',
     trace: 'on-first-retry',
   },
   projects: [

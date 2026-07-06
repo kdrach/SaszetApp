@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: app-db
     environment:
-      POSTGRES_USER: saszetapp_user
-      POSTGRES_PASSWORD: saszetapp_password
-      POSTGRES_DB: saszetapp_db
+      POSTGRES_USER: ${POSTGRES_USER:-saszetapp_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-saszetapp_password}
+      POSTGRES_DB: ${POSTGRES_DB:-saszetapp_db}
     ports:
       - "5434:5432"
     volumes:
@@ -21,9 +21,9 @@ services:
     image: postgres:16-alpine
     container_name: keycloak-db
     environment:
-      POSTGRES_USER: keycloak_user
-      POSTGRES_PASSWORD: keycloak_password
-      POSTGRES_DB: keycloak_db
+      POSTGRES_USER: ${KEYCLOAK_USER:-keycloak_user}
+      POSTGRES_PASSWORD: ${KEYCLOAK_PASSWORD:-keycloak_password}
+      POSTGRES_DB: ${KEYCLOAK_DB:-keycloak_db}
     ports:
       - "5433:5432"
     volumes:
@@ -41,11 +41,11 @@ services:
     command: start-dev --import-realm
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak_db
-      KC_DB_USERNAME: keycloak_user
-      KC_DB_PASSWORD: keycloak_password
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KEYCLOAK_DB:-keycloak_db}
+      KC_DB_USERNAME: ${KEYCLOAK_USER:-keycloak_user}
+      KC_DB_PASSWORD: ${KEYCLOAK_PASSWORD:-keycloak_password}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
     ports:
@@ -65,9 +65,9 @@ services:
     ports:
       - "5000:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Host=app-db;Database=saszetapp_db;Username=saszetapp_user;Password=saszetapp_password
+      - ConnectionStrings__DefaultConnection=Host=app-db;Database=${POSTGRES_DB:-saszetapp_db};Username=${POSTGRES_USER:-saszetapp_user};Password=${POSTGRES_PASSWORD:-saszetapp_password}
       - Jwt__Authority=http://keycloak:8080/realms/petfood-realm
-      - ENCRYPTION_KEY=supersecretencryptionkey123456789012 # 32 bytes for AES-256
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-supersecretencryptionkey123456789012} # 32 bytes for AES-256
       - ASPNETCORE_HTTP_PORTS=8080
     depends_on:
       app-db:
