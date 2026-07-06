@@ -32,6 +32,15 @@ namespace SaszetApp.Api.Data
             {
                 entity.ToTable("LlmProviders");
                 entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.ProviderName).IsUnique();
+                if (Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+                {
+                    entity.HasIndex(e => e.IsPrimary).IsUnique().HasFilter("\"IsPrimary\" = true");
+                }
+                else
+                {
+                    entity.HasIndex(e => e.IsPrimary).IsUnique().HasFilter("\"IsPrimary\" = 1");
+                }
             });
         }
     }

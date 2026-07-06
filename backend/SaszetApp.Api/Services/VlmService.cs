@@ -142,6 +142,8 @@ namespace SaszetApp.Api.Services
             }
             else if (provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
             {
+                client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
+
                 var requestBody = new
                 {
                     systemInstruction = new { parts = new[] { new { text = systemPrompt } } },
@@ -150,7 +152,7 @@ namespace SaszetApp.Api.Services
                 };
 
                 var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                var response = await client.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}", content);
+                var response = await client.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", content);
                 response.EnsureSuccessStatusCode();
 
                 var responseString = await response.Content.ReadAsStringAsync();
