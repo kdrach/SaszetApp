@@ -1,0 +1,17 @@
+{
+  "discover": "Odkrywaj",
+  "searchPlaceholder": "Wpisz nazwę karmy...",
+  "recentScans": "Ostatnio skanowane",
+  "placeBarcode": "Umieść kod w ramce",
+  "takePhoto": "Zrób wyraźne zdjęcie składu",
+  "loadingReading": "Czytam etykietę...",
+  "loadingConsulting": "Konsultacja z AI weterynarzem...",
+  "loadingMeat": "Szukam mięsa...",
+  "pros": "Zalety",
+  "cons": "Wady",
+  "rawIngredients": "Surowy skład",
+  "cameraPermission": "Wymagany dostęp do aparatu",
+  "rating": "Ocena",
+  "modeEan": "Skanuj EAN",
+  "modePhoto": "Zdjęcie składu"
+}

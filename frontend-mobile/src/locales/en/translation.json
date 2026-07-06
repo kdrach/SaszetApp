@@ -1,0 +1,17 @@
+{
+  "discover": "Discover",
+  "searchPlaceholder": "Enter pet food name...",
+  "recentScans": "Recent scans",
+  "placeBarcode": "Place barcode inside the frame",
+  "takePhoto": "Take a clear photo of the ingredients",
+  "loadingReading": "Reading the label...",
+  "loadingConsulting": "Consulting AI vet...",
+  "loadingMeat": "Looking for meat...",
+  "pros": "Pros",
+  "cons": "Cons",
+  "rawIngredients": "Raw ingredients",
+  "cameraPermission": "Camera access required",
+  "rating": "Rating",
+  "modeEan": "Scan EAN",
+  "modePhoto": "Ingredients Photo"
+}
