@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -10,24 +10,39 @@ export default function ScannerView() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'ean' | 'photo'>('ean');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const stopPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     let html5QrCode: Html5Qrcode;
+    let isMounted = true;
+    let isStarting = false;
 
     const startCamera = async () => {
+      if (stopPromiseRef.current) {
+        await stopPromiseRef.current;
+      }
       try {
         const devices = await Html5Qrcode.getCameras();
         if (devices && devices.length) {
+          if (!isMounted) return;
           setHasPermission(true);
           html5QrCode = new Html5Qrcode("reader");
+          isStarting = true;
           
           if (mode === 'ean') {
             await html5QrCode.start(
               { facingMode: "environment" },
               { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
               (decodedText) => {
-                html5QrCode.stop();
-                navigate(`/product/${decodedText}`);
+                if (html5QrCode.isScanning && !stopPromiseRef.current) {
+                  stopPromiseRef.current = html5QrCode.stop().then(() => {
+                    stopPromiseRef.current = null;
+                    navigate(`/product/${encodeURIComponent(decodedText)}`);
+                  }).catch((err) => {
+                    stopPromiseRef.current = null;
+                    console.error(err);
+                  });
+                }
               },
               () => {}
             );
@@ -39,8 +54,16 @@ export default function ScannerView() {
               () => {}
             );
           }
+          isStarting = false;
+
+          if (!isMounted) {
+            html5QrCode.stop().catch(console.error);
+            return;
+          }
         }
       } catch (err) {
+        isStarting = false;
+        if (!isMounted) return;
         console.error("Camera error:", err);
         setHasPermission(false);
       }
@@ -49,8 +72,14 @@ export default function ScannerView() {
     startCamera();
 
     return () => {
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().catch(console.error);
+      isMounted = false;
+      if (html5QrCode && !isStarting && html5QrCode.isScanning && !stopPromiseRef.current) {
+        stopPromiseRef.current = html5QrCode.stop().then(() => {
+          stopPromiseRef.current = null;
+        }).catch((err) => {
+          stopPromiseRef.current = null;
+          console.error(err);
+        });
       }
     };
   }, [mode, navigate]);
