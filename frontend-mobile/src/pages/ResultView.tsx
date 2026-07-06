@@ -61,9 +61,9 @@ export default function ResultView() {
   if (!id) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
-        <p className="text-xl text-gray-500 mb-6 text-center">Invalid product ID.</p>
+        <p className="text-xl text-gray-500 mb-6 text-center">{t('invalid_product_id')}</p>
         <button onClick={() => navigate(-1)} className="px-6 py-3 bg-[var(--color-primary)] text-white rounded-xl font-semibold shadow-lg active:scale-95 transition-transform">
-          Go Back
+          {t('go_back')}
         </button>
       </div>
     );
@@ -72,9 +72,9 @@ export default function ResultView() {
   if (!result) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
-        <p className="text-xl text-gray-500 mb-6 text-center">Product not found.</p>
+        <p className="text-xl text-gray-500 mb-6 text-center">{t('product_not_found')}</p>
         <button onClick={() => navigate(-1)} className="px-6 py-3 bg-[var(--color-primary)] text-white rounded-xl font-semibold shadow-lg active:scale-95 transition-transform">
-          Go Back
+          {t('go_back')}
         </button>
       </div>
     );

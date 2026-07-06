@@ -3,8 +3,11 @@ import HomeView from './pages/HomeView';
 import ScannerView from './pages/ScannerView';
 import ResultView from './pages/ResultView';
 import BottomTabBar from './components/BottomTabBar';
+import { useTranslation } from 'react-i18next';
 
 function App() {
+  const { t } = useTranslation();
+
   return (
     <BrowserRouter>
       <div className="flex flex-col min-h-screen bg-[var(--color-background)]">
@@ -13,7 +16,7 @@ function App() {
             <Route path="/" element={<HomeView />} />
             <Route path="/scan" element={<ScannerView />} />
             <Route path="/product/:id" element={<ResultView />} />
-            <Route path="/profile" element={<div className="p-6 text-center text-gray-500 mt-20">Profile Placeholder</div>} />
+            <Route path="/profile" element={<div className="p-6 text-center text-gray-500 mt-20">{t('profile_placeholder')}</div>} />
           </Routes>
         </div>
         <BottomTabBar />

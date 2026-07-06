@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -10,12 +10,16 @@ export default function ScannerView() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'ean' | 'photo'>('ean');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const stopPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     let html5QrCode: Html5Qrcode;
     let isMounted = true;
 
     const startCamera = async () => {
+      if (stopPromiseRef.current) {
+        await stopPromiseRef.current;
+      }
       try {
         const devices = await Html5Qrcode.getCameras();
         if (devices && devices.length) {
@@ -28,7 +32,15 @@ export default function ScannerView() {
               { facingMode: "environment" },
               { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
               (decodedText) => {
-                html5QrCode.stop().then(() => navigate(`/product/${decodedText}`)).catch(console.error);
+                if (html5QrCode.isScanning && !stopPromiseRef.current) {
+                  stopPromiseRef.current = html5QrCode.stop().then(() => {
+                    stopPromiseRef.current = null;
+                    navigate(`/product/${encodeURIComponent(decodedText)}`);
+                  }).catch((err) => {
+                    stopPromiseRef.current = null;
+                    console.error(err);
+                  });
+                }
               },
               () => {}
             );
@@ -52,8 +64,13 @@ export default function ScannerView() {
 
     return () => {
       isMounted = false;
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().catch(console.error);
+      if (html5QrCode && html5QrCode.isScanning && !stopPromiseRef.current) {
+        stopPromiseRef.current = html5QrCode.stop().then(() => {
+          stopPromiseRef.current = null;
+        }).catch((err) => {
+          stopPromiseRef.current = null;
+          console.error(err);
+        });
       }
     };
   }, [mode, navigate]);
