@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ScannedItem } from '../types';
+import type { ScannedItem } from '../types';
 
 interface AppState {
   recentScans: ScannedItem[];

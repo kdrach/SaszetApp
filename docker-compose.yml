@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: saszetapp_password
       POSTGRES_DB: saszetapp_db
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - app-db-data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -49,12 +49,53 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
     ports:
-      - "8080:8080"
+      - "8180:8080"
     volumes:
       - ./infrastructure/keycloak/realm-export.json:/opt/keycloak/data/import/realm.json:ro
     depends_on:
       keycloak-db:
         condition: service_healthy
+    restart: unless-stopped
+
+  backend-api:
+    build:
+      context: ./backend/SaszetApp.Api
+      dockerfile: Dockerfile
+    container_name: backend-api
+    ports:
+      - "5000:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=app-db;Database=saszetapp_db;Username=saszetapp_user;Password=saszetapp_password
+      - Jwt__Authority=http://keycloak:8080/realms/petfood-realm
+      - ENCRYPTION_KEY=supersecretencryptionkey123456789012 # 32 bytes for AES-256
+      - ASPNETCORE_HTTP_PORTS=8080
+    depends_on:
+      app-db:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend-mobile:
+    build:
+      context: ./frontend-mobile
+      dockerfile: Dockerfile
+    container_name: frontend-mobile
+    ports:
+      - "3010:80"
+    depends_on:
+      - backend-api
+    restart: unless-stopped
+
+  frontend-admin:
+    build:
+      context: ./frontend-admin
+      dockerfile: Dockerfile
+    container_name: frontend-admin
+    ports:
+      - "3011:80"
+    depends_on:
+      - backend-api
     restart: unless-stopped
 
 volumes:

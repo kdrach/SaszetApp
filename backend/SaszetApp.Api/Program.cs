@@ -19,6 +19,7 @@ builder.Services.AddScoped<SaszetApp.Api.Services.Mappers.ILlmProviderModelMappe
 builder.Services.AddSingleton<SaszetApp.Api.Services.IEncryptionService, SaszetApp.Api.Services.EncryptionService>();
 builder.Services.AddScoped<SaszetApp.Api.Services.IVlmService, SaszetApp.Api.Services.VlmService>();
 builder.Services.AddHttpClient(); // Add HttpClient factory for VLM service
+builder.Services.AddHealthChecks();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -78,5 +79,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();
