@@ -8,16 +8,22 @@ test('Backend API health check is responding', async ({ request }) => {
 
 test('Frontend mobile is served', async ({ page }) => {
   const mobileUrl = process.env.MOBILE_URL || 'http://localhost:3010';
+  page.on('pageerror', exception => {
+    console.error(`Uncaught exception: "${exception}"`);
+    throw exception;
+  });
   await page.goto(mobileUrl);
-  // Just expecting the page to not be a 404 or connection refused
-  // The default Vite app title or empty is fine, we just want to ensure it loads
-  const body = await page.locator('body');
-  await expect(body).toBeVisible();
+  const root = await page.locator('#root');
+  await expect(root).toBeVisible();
 });
 
 test('Frontend admin is served', async ({ page }) => {
   const adminUrl = process.env.ADMIN_URL || 'http://localhost:3011';
+  page.on('pageerror', exception => {
+    console.error(`Uncaught exception: "${exception}"`);
+    throw exception;
+  });
   await page.goto(adminUrl);
-  const body = await page.locator('body');
-  await expect(body).toBeVisible();
+  const root = await page.locator('#root');
+  await expect(root).toBeVisible();
 });
