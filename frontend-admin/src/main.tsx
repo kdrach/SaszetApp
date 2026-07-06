@@ -13,7 +13,7 @@ if (rootElement) {
     <React.StrictMode>
       <ReactKeycloakProvider 
         authClient={keycloak}
-        initOptions={{ onLoad: 'login-required', pkceMethod: 'S256' }}
+        initOptions={{ onLoad: 'login-required', pkceMethod: 'S256', checkLoginIframe: false }}
         LoadingComponent={<div className="flex items-center justify-center min-h-screen bg-background">Loading authentication...</div>}
       >
         <App />
