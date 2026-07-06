@@ -15,6 +15,7 @@ export default function ScannerView() {
   useEffect(() => {
     let html5QrCode: Html5Qrcode;
     let isMounted = true;
+    let isStarting = false;
 
     const startCamera = async () => {
       if (stopPromiseRef.current) {
@@ -26,6 +27,7 @@ export default function ScannerView() {
           if (!isMounted) return;
           setHasPermission(true);
           html5QrCode = new Html5Qrcode("reader");
+          isStarting = true;
           
           if (mode === 'ean') {
             await html5QrCode.start(
@@ -52,8 +54,15 @@ export default function ScannerView() {
               () => {}
             );
           }
+          isStarting = false;
+
+          if (!isMounted) {
+            html5QrCode.stop().catch(console.error);
+            return;
+          }
         }
       } catch (err) {
+        isStarting = false;
         if (!isMounted) return;
         console.error("Camera error:", err);
         setHasPermission(false);
@@ -64,7 +73,7 @@ export default function ScannerView() {
 
     return () => {
       isMounted = false;
-      if (html5QrCode && html5QrCode.isScanning && !stopPromiseRef.current) {
+      if (html5QrCode && !isStarting && html5QrCode.isScanning && !stopPromiseRef.current) {
         stopPromiseRef.current = html5QrCode.stop().then(() => {
           stopPromiseRef.current = null;
         }).catch((err) => {
