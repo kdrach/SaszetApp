@@ -19,18 +19,21 @@ builder.Services.AddScoped<SaszetApp.Api.Services.Mappers.ILlmProviderModelMappe
 builder.Services.AddSingleton<SaszetApp.Api.Services.IEncryptionService, SaszetApp.Api.Services.EncryptionService>();
 builder.Services.AddScoped<SaszetApp.Api.Services.IVlmService, SaszetApp.Api.Services.VlmService>();
 builder.Services.AddHttpClient(); // Add HttpClient factory for VLM service
+builder.Services.AddHealthChecks();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = builder.Configuration["Jwt:Authority"];
+        options.MetadataAddress = $"{builder.Configuration["Jwt:Authority"]}/.well-known/openid-configuration";
         options.RequireHttpsMetadata = false; // Internal Docker network
-        options.Audience = "account"; // Default Keycloak audience
+        options.Audience = "saszetapp-api"; // Custom Keycloak audience
         
         options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidateAudience = false,
+            ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuer"] ?? builder.Configuration["Jwt:Authority"] },
+            ValidateAudience = true,
+            ValidAudiences = new[] { "saszetapp-api" },
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true
         };
@@ -51,7 +54,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                             {
                                 foreach (var role in rolesElement.EnumerateArray())
                                 {
-                                    identity.AddClaim(new Claim(ClaimTypes.Role, role.GetString()));
+                                    var roleStr = role.GetString();
+                                    if (!string.IsNullOrEmpty(roleStr))
+                                    {
+                                        identity.AddClaim(new Claim(ClaimTypes.Role, roleStr));
+                                    }
                                 }
                             }
                         }
@@ -78,5 +85,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();
