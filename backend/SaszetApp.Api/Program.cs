@@ -24,14 +24,16 @@ builder.Services.AddHealthChecks();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = builder.Configuration["Jwt:Authority"];
+        options.MetadataAddress = $"{builder.Configuration["Jwt:Authority"]}/.well-known/openid-configuration";
         options.RequireHttpsMetadata = false; // Internal Docker network
         options.Audience = "account"; // Default Keycloak audience
         
         options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidateAudience = false,
+            ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuer"] ?? builder.Configuration["Jwt:Authority"] },
+            ValidateAudience = true,
+            ValidAudiences = new[] { "account" },
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true
         };
