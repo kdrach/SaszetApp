@@ -26,13 +26,18 @@ const AdminDashboardView: React.FC = () => {
     fetchProviders();
   }, []);
 
-  const handleSave = async (data: CreateProviderDto) => {
+  const handleSave = async (id: string | undefined, data: CreateProviderDto) => {
     try {
-      await providersApi.createProvider(data);
+      if (id) {
+        await providersApi.updateProvider(id, data);
+      } else {
+        await providersApi.createProvider(data);
+      }
       await fetchProviders();
       setError(null);
     } catch (err: any) {
       setError('Error saving provider: ' + err.message);
+      throw err;
     }
   };
 

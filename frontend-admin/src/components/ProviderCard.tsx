@@ -5,7 +5,7 @@ import { LlmProvider, CreateProviderDto } from '../types';
 interface ProviderCardProps {
   providerName: string;
   existingData?: LlmProvider;
-  onSave: (data: CreateProviderDto) => Promise<void>;
+  onSave: (id: string | undefined, data: CreateProviderDto) => Promise<void>;
   onTest: (id: string) => Promise<boolean>;
   onSetPrimary: (id: string) => Promise<void>;
   isGlobalPrimary: string | null;
@@ -27,8 +27,8 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
 
   useEffect(() => {
     if (existingData) {
-      setModelName(existingData.modelName);
-      setIsActive(existingData.isActive);
+      setModelName(existingData.modelName || '');
+      setIsActive(existingData.isActive ?? true);
     }
   }, [existingData]);
 
@@ -37,7 +37,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSave({
+      await onSave(existingData?.id, {
         providerName,
         modelName,
         apiKey: apiKey || 'KEEP_EXISTING', // Assuming backend logic handles this, or just require key
@@ -45,6 +45,8 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
         isActive
       });
       setApiKey(''); // clear key after save
+    } catch (err) {
+      // The parent component handles the error notification
     } finally {
       setIsSaving(false);
     }

@@ -30,6 +30,10 @@ export const providersApi = {
     const response = await api.post<LlmProvider>('/AdminProvider', data);
     return response.data;
   },
+  updateProvider: async (id: string, data: CreateProviderDto) => {
+    const response = await api.put<LlmProvider>(`/AdminProvider/${id}`, data);
+    return response.data;
+  },
   setPrimary: async (id: string) => {
     const response = await api.put(`/AdminProvider/${id}/set-primary`);
     return response.data;
