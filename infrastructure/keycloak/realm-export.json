@@ -17,8 +17,8 @@
       "publicClient": true,
       "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
-      "redirectUris": ["*"],
-      "webOrigins": ["*"]
+      "redirectUris": ["http://localhost:3011/*"],
+      "webOrigins": ["+"]
     },
     {
       "clientId": "saszetapp-pwa",
@@ -26,8 +26,8 @@
       "publicClient": true,
       "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
-      "redirectUris": ["*"],
-      "webOrigins": ["*"]
+      "redirectUris": ["http://localhost:3010/*"],
+      "webOrigins": ["+"]
     }
   ],
   "users": [
