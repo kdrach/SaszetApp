@@ -54,7 +54,7 @@ namespace SaszetApp.Api.Tests
             _dbContext.LlmProviders.Add(new LlmProviderEntity
             {
                 Id = Guid.NewGuid(),
-                ProviderName = "Test",
+                ProviderName = "OpenAI",
                 EncryptedApiKey = "secret_encrypted",
                 IsPrimary = true
             });
@@ -69,7 +69,7 @@ namespace SaszetApp.Api.Tests
             var model = models.First();
             
             Assert.Equal("********", model.EncryptedApiKey);
-            Assert.Equal("Test", model.ProviderName);
+            Assert.Equal("OpenAI", model.ProviderName);
         }
 
         [Fact]
@@ -79,7 +79,7 @@ namespace SaszetApp.Api.Tests
             var existing = new LlmProviderEntity
             {
                 Id = Guid.NewGuid(),
-                ProviderName = "Old Primary",
+                ProviderName = "OpenAI",
                 IsPrimary = true
             };
             _dbContext.LlmProviders.Add(existing);
@@ -87,7 +87,7 @@ namespace SaszetApp.Api.Tests
 
             var dto = new AdminProviderController.CreateProviderDto
             {
-                ProviderName = "New Primary",
+                ProviderName = "Anthropic",
                 ApiKey = "new_secret",
                 IsPrimary = true
             };
@@ -102,7 +102,7 @@ namespace SaszetApp.Api.Tests
             var dbOld = await _dbContext.LlmProviders.FindAsync(existing.Id);
             Assert.False(dbOld.IsPrimary);
             
-            var dbNew = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.ProviderName == "New Primary");
+            var dbNew = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.ProviderName == "Anthropic");
             Assert.NotNull(dbNew);
             Assert.True(dbNew.IsPrimary);
             Assert.Equal("enc_new_secret", dbNew.EncryptedApiKey);
@@ -115,7 +115,7 @@ namespace SaszetApp.Api.Tests
             var existing = new LlmProviderEntity
             {
                 Id = Guid.NewGuid(),
-                ProviderName = "Existing",
+                ProviderName = "OpenAI",
                 ModelName = "old_model",
                 EncryptedApiKey = "enc_old_key",
                 IsPrimary = false,
@@ -126,7 +126,7 @@ namespace SaszetApp.Api.Tests
 
             var dto = new AdminProviderController.CreateProviderDto
             {
-                ProviderName = "Existing",
+                ProviderName = "OpenAI",
                 ModelName = "new_model",
                 ApiKey = "new_key",
                 IsPrimary = true,
@@ -154,7 +154,7 @@ namespace SaszetApp.Api.Tests
             var existing = new LlmProviderEntity
             {
                 Id = Guid.NewGuid(),
-                ProviderName = "Existing",
+                ProviderName = "Anthropic",
                 ModelName = "old_model",
                 EncryptedApiKey = "enc_old_key",
                 IsPrimary = false,
@@ -165,7 +165,7 @@ namespace SaszetApp.Api.Tests
 
             var dto = new AdminProviderController.CreateProviderDto
             {
-                ProviderName = "Existing",
+                ProviderName = "Anthropic",
                 ModelName = "new_model",
                 ApiKey = "KEEP_EXISTING",
                 IsPrimary = true,
@@ -187,7 +187,7 @@ namespace SaszetApp.Api.Tests
             // Arrange
             var dto = new AdminProviderController.CreateProviderDto
             {
-                ProviderName = "NewProv",
+                ProviderName = "Gemini",
                 ModelName = "new_model",
                 ApiKey = "KEEP_EXISTING",
                 IsPrimary = true,
@@ -209,7 +209,7 @@ namespace SaszetApp.Api.Tests
             var provider = new LlmProviderEntity
             {
                 Id = Guid.NewGuid(),
-                ProviderName = "TestProvider",
+                ProviderName = "OpenAI",
                 EncryptedApiKey = "enc_secret"
             };
             _dbContext.LlmProviders.Add(provider);
@@ -314,6 +314,39 @@ namespace SaszetApp.Api.Tests
             Assert.Equal("secret", capturedRequest.Headers.GetValues("x-api-key").First());
             Assert.True(capturedRequest.Headers.Contains("anthropic-version"));
             Assert.Equal("2023-06-01", capturedRequest.Headers.GetValues("anthropic-version").First());
+        }
+
+        [Fact]
+        public async Task SetPrimary_ChangesPrimaryProvider()
+        {
+            // Arrange
+            var existingPrimary = new LlmProviderEntity
+            {
+                Id = Guid.NewGuid(),
+                ProviderName = "OpenAI",
+                IsPrimary = true
+            };
+            var newPrimary = new LlmProviderEntity
+            {
+                Id = Guid.NewGuid(),
+                ProviderName = "Anthropic",
+                IsPrimary = false
+            };
+            _dbContext.LlmProviders.AddRange(existingPrimary, newPrimary);
+            await _dbContext.SaveChangesAsync();
+
+            // Act
+            var result = await _controller.SetPrimary(newPrimary.Id);
+
+            // Assert
+            Assert.IsAssignableFrom<IActionResult>(result);
+            
+            _dbContext.ChangeTracker.Clear();
+            var dbOldPrimary = await _dbContext.LlmProviders.FindAsync(existingPrimary.Id);
+            Assert.False(dbOldPrimary.IsPrimary);
+            
+            var dbNewPrimary = await _dbContext.LlmProviders.FindAsync(newPrimary.Id);
+            Assert.True(dbNewPrimary.IsPrimary);
         }
 
         public void Dispose()
