@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: app-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-saszetapp_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-saszetapp_password}
-      POSTGRES_DB: ${POSTGRES_DB:-saszetapp_db}
+      POSTGRES_USER: ${POSTGRES_USER?Error: POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?Error: POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB?Error: POSTGRES_DB is required}
     ports:
       - "5434:5432"
     volumes:
@@ -21,9 +21,9 @@ services:
     image: postgres:16-alpine
     container_name: keycloak-db
     environment:
-      POSTGRES_USER: ${KEYCLOAK_USER:-keycloak_user}
-      POSTGRES_PASSWORD: ${KEYCLOAK_PASSWORD:-keycloak_password}
-      POSTGRES_DB: ${KEYCLOAK_DB:-keycloak_db}
+      POSTGRES_USER: ${KEYCLOAK_USER?Error: KEYCLOAK_USER is required}
+      POSTGRES_PASSWORD: ${KEYCLOAK_PASSWORD?Error: KEYCLOAK_PASSWORD is required}
+      POSTGRES_DB: ${KEYCLOAK_DB?Error: KEYCLOAK_DB is required}
     ports:
       - "5433:5432"
     volumes:
@@ -41,11 +41,11 @@ services:
     command: start-dev --import-realm
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KEYCLOAK_DB:-keycloak_db}
-      KC_DB_USERNAME: ${KEYCLOAK_USER:-keycloak_user}
-      KC_DB_PASSWORD: ${KEYCLOAK_PASSWORD:-keycloak_password}
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KEYCLOAK_DB?Error: KEYCLOAK_DB is required}
+      KC_DB_USERNAME: ${KEYCLOAK_USER?Error: KEYCLOAK_USER is required}
+      KC_DB_PASSWORD: ${KEYCLOAK_PASSWORD?Error: KEYCLOAK_PASSWORD is required}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN?Error: KEYCLOAK_ADMIN is required}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD?Error: KEYCLOAK_ADMIN_PASSWORD is required}
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
       KC_HOSTNAME_URL: http://localhost:8180
@@ -66,9 +66,9 @@ services:
     ports:
       - "5000:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Host=app-db;Database=${POSTGRES_DB:-saszetapp_db};Username=${POSTGRES_USER:-saszetapp_user};Password=${POSTGRES_PASSWORD:-saszetapp_password}
+      - ConnectionStrings__DefaultConnection=Host=app-db;Database=${POSTGRES_DB?Error: POSTGRES_DB is required};Username=${POSTGRES_USER?Error: POSTGRES_USER is required};Password=${POSTGRES_PASSWORD?Error: POSTGRES_PASSWORD is required}
       - Jwt__Authority=http://keycloak:8080/realms/petfood-realm
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-supersecretencryptionkey123456789012} # 32 bytes for AES-256
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY?Error: ENCRYPTION_KEY is required} # 32 bytes for AES-256
       - ASPNETCORE_HTTP_PORTS=8080
     depends_on:
       app-db:
@@ -76,6 +76,11 @@ services:
       keycloak:
         condition: service_started
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   frontend-mobile:
     build:
@@ -85,7 +90,8 @@ services:
     ports:
       - "3010:80"
     depends_on:
-      - backend-api
+      backend-api:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend-admin:
@@ -96,7 +102,8 @@ services:
     ports:
       - "3011:80"
     depends_on:
-      - backend-api
+      backend-api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
