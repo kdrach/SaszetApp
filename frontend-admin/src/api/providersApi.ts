@@ -3,7 +3,7 @@ import keycloak from '../keycloak';
 import { LlmProvider, CreateProviderDto } from '../types';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api', // Adjust as needed for backend
+  baseURL: `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`,
 });
 
 api.interceptors.request.use(async (config) => {
