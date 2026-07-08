@@ -25,7 +25,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let isMounted = true;
     
-    keycloak.init({ onLoad: 'check-sso', checkLoginIframe: false })
+    keycloak.init({ onLoad: 'login-required', checkLoginIframe: false })
       .then((authenticated) => {
         if (isMounted) {
           setIsAuthenticated(authenticated);
