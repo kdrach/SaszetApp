@@ -101,6 +101,8 @@ services:
     build:
       context: ./frontend-mobile
       dockerfile: Dockerfile
+      args:
+        VITE_MODE: development
     container_name: frontend-mobile
     ports:
       - "3010:80"
@@ -118,6 +120,8 @@ services:
     build:
       context: ./frontend-admin
       dockerfile: Dockerfile
+      args:
+        VITE_MODE: development
     container_name: frontend-admin
     ports:
       - "3011:80"
