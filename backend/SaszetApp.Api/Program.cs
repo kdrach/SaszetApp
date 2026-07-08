@@ -81,6 +81,7 @@ builder.Services.AddAuthentication()
         ValidateIssuer = true,
         ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuerAdmin"] ?? builder.Configuration["Jwt:AdminAuthority"] },
         ValidateAudience = true,
+        ValidAudiences = new[] { "account" },
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true
     };
@@ -97,6 +98,7 @@ builder.Services.AddAuthentication()
         ValidateIssuer = true,
         ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuerCustomer"] ?? builder.Configuration["Jwt:CustomerAuthority"] },
         ValidateAudience = true,
+        ValidAudiences = new[] { "account" },
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true
     };
@@ -138,3 +140,5 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+public partial class Program { }
