@@ -105,6 +105,7 @@ namespace SaszetApp.Api.Tests
             _mockVlmService.Verify(v => v.AnalyzeProductAsync("9999", "en"), Times.Once);
         }
 
+
         public void Dispose()
         {
             _dbContext.Database.EnsureDeleted();

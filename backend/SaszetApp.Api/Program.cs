@@ -39,54 +39,86 @@ builder.Services.AddScoped<SaszetApp.Api.Services.IVlmService, SaszetApp.Api.Ser
 builder.Services.AddHttpClient(); // Add HttpClient factory for VLM service
 builder.Services.AddHealthChecks();
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+var jwtEvents = new JwtBearerEvents
+{
+    OnTokenValidated = context =>
     {
-        options.MetadataAddress = $"{builder.Configuration["Jwt:Authority"]}/.well-known/openid-configuration";
-        options.RequireHttpsMetadata = false; // Internal Docker network
-        options.Audience = "saszetapp-api"; // Custom Keycloak audience
-        
-        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        if (context.Principal?.Identity is ClaimsIdentity identity)
         {
-            ValidateIssuer = true,
-            ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuer"] ?? builder.Configuration["Jwt:Authority"] },
-            ValidateAudience = true,
-            ValidAudiences = new[] { "saszetapp-api" },
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true
-        };
-        
-        options.Events = new JwtBearerEvents
-        {
-            OnTokenValidated = context =>
+            var realmAccessClaim = identity.FindFirst("realm_access");
+            if (realmAccessClaim != null)
             {
-                if (context.Principal?.Identity is ClaimsIdentity identity)
+                try
                 {
-                    var realmAccessClaim = identity.FindFirst("realm_access");
-                    if (realmAccessClaim != null)
+                    using var doc = System.Text.Json.JsonDocument.Parse(realmAccessClaim.Value);
+                    if (doc.RootElement.TryGetProperty("roles", out var rolesElement))
                     {
-                        try
+                        foreach (var role in rolesElement.EnumerateArray())
                         {
-                            using var doc = System.Text.Json.JsonDocument.Parse(realmAccessClaim.Value);
-                            if (doc.RootElement.TryGetProperty("roles", out var rolesElement))
+                            var roleStr = role.GetString();
+                            if (!string.IsNullOrEmpty(roleStr))
                             {
-                                foreach (var role in rolesElement.EnumerateArray())
-                                {
-                                    var roleStr = role.GetString();
-                                    if (!string.IsNullOrEmpty(roleStr))
-                                    {
-                                        identity.AddClaim(new Claim(ClaimTypes.Role, roleStr));
-                                    }
-                                }
+                                identity.AddClaim(new Claim(ClaimTypes.Role, roleStr));
                             }
                         }
-                        catch { /* Ignore parsing errors */ }
                     }
                 }
-                return Task.CompletedTask;
+                catch { /* Ignore parsing errors */ }
             }
-        };
+        }
+        return Task.CompletedTask;
+    }
+};
+
+builder.Services.AddAuthentication()
+.AddJwtBearer("AdminAuth", options =>
+{
+    options.MetadataAddress = $"{builder.Configuration["Jwt:AdminAuthority"]}/.well-known/openid-configuration";
+    options.RequireHttpsMetadata = false; 
+    
+    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuerAdmin"] ?? builder.Configuration["Jwt:AdminAuthority"] },
+        ValidateAudience = true,
+        ValidAudiences = new[] { "account" },
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true
+    };
+    
+    options.Events = jwtEvents;
+})
+.AddJwtBearer("CustomerAuth", options =>
+{
+    options.MetadataAddress = $"{builder.Configuration["Jwt:CustomerAuthority"]}/.well-known/openid-configuration";
+    options.RequireHttpsMetadata = false; 
+    
+    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuerCustomer"] ?? builder.Configuration["Jwt:CustomerAuthority"] },
+        ValidateAudience = true,
+        ValidAudiences = new[] { "account" },
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true
+    };
+    
+    options.Events = jwtEvents;
+});
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminPolicy", policy =>
+    {
+        policy.AuthenticationSchemes.Add("AdminAuth");
+        policy.RequireRole("admin");
     });
+    options.AddPolicy("CustomerPolicy", policy =>
+    {
+        policy.AuthenticationSchemes.Add("CustomerAuth");
+        policy.RequireAuthenticatedUser();
+    });
+});
 
 var app = builder.Build();
 
@@ -108,3 +140,5 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+public partial class Program { }

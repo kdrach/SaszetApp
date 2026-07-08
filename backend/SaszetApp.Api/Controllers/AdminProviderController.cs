@@ -14,7 +14,7 @@ namespace SaszetApp.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "admin")]
+    [Authorize(Policy = "AdminPolicy")]
     public class AdminProviderController : ControllerBase
     {
         private readonly AppDbContext _dbContext;

@@ -1,0 +1,33 @@
+{
+  "id": "petfood-customer-realm",
+  "realm": "petfood-customer-realm",
+  "enabled": true,
+  "registrationAllowed": true,
+  "verifyEmail": true,
+  "loginTheme": "saszet-theme",
+  "smtpServer": {
+    "host": "${env.SMTP_HOST}",
+    "port": "${env.SMTP_PORT}",
+    "user": "${env.SMTP_USER}",
+    "password": "${env.SMTP_PASSWORD}",
+    "from": "${env.SMTP_FROM}"
+  },
+  "clients": [
+    {
+      "clientId": "saszetapp-pwa",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "http://localhost:3010/",
+        "https://saszet.app/"
+      ],
+      "webOrigins": [
+        "http://localhost:3010",
+        "https://saszet.app"
+      ]
+    }
+  ],
+  "users": []
+}
