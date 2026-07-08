@@ -12,9 +12,9 @@ ssh user@<your-vps-ip>
 git clone https://github.com/kdrach/SaszetApp.git
 cd SaszetApp
 
-# 3. Configure secrets
-cp .env.prod.example .env.prod
-nano .env.prod   # Fill in all required values
+# 3. Configure secrets (auto-generated)
+./infrastructure/scripts/generate-env.sh
+# Or manually: cp .env.prod.example .env.prod && nano .env.prod
 
 # 4. Make scripts executable
 chmod +x infrastructure/scripts/*.sh
