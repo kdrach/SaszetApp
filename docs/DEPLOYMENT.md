@@ -1,6 +1,52 @@
 # SaszetApp — Deployment Guide
 
+## Quick Start — Automated Bootstrap (recommended)
+
+The fastest way to go from a clean VPS to a fully running production deployment:
+
+```bash
+# 1. SSH into your VPS
+ssh user@<your-vps-ip>
+
+# 2. Clone the repository
+git clone https://github.com/kdrach/SaszetApp.git
+cd SaszetApp
+
+# 3. Configure secrets
+cp .env.prod.example .env.prod
+nano .env.prod   # Fill in all required values
+
+# 4. Make scripts executable
+chmod +x infrastructure/scripts/*.sh
+
+# 5. Run the bootstrap
+./infrastructure/scripts/bootstrap-vps.sh --skip-cleanup
+
+# 6. Done! Visit https://saszet.app
+```
+
+> **Tip — First time?** Test the SSL flow without hitting Let's Encrypt rate limits:
+> ```bash
+> ./infrastructure/scripts/bootstrap-vps.sh --skip-cleanup --staging
+> ```
+> Staging certificates are not trusted by browsers but validate the whole flow. Run without `--staging` afterwards for real certs.
+
+### Bootstrap flags
+
+| Flag | Description |
+|------|-------------|
+| `--skip-cleanup` | Skip cleanup step (use on a fresh VPS with nothing to wipe) |
+| `--skip-build` | Skip image build (config-only redeployment) |
+| `--skip-ssl` | Skip SSL initialization (certs already valid) |
+| `--staging` | Use Let's Encrypt staging (no rate limits during testing) |
+| `--help` | Print full usage and exit |
+
+> The bootstrap is **idempotent** — safe to re-run on an already-running deployment without breaking it.
+
+---
+
 ## Overview
+
 
 This guide describes how to deploy SaszetApp to a VPS using Docker Compose.  
 The application consists of 7 containers: `app-db`, `keycloak-db`, `keycloak`, `backend-api`, `frontend-mobile`, `frontend-admin`, and `nginx-proxy` (with `certbot` for SSL).
