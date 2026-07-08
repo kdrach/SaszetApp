@@ -105,6 +105,18 @@ namespace SaszetApp.Api.Tests
             _mockVlmService.Verify(v => v.AnalyzeProductAsync("9999", "en"), Times.Once);
         }
 
+        [Fact]
+        public void Controller_RequiresCustomerPolicy()
+        {
+            var authorizeAttribute = typeof(ScanController)
+                .GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), true)
+                .Cast<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>()
+                .FirstOrDefault();
+
+            Assert.NotNull(authorizeAttribute);
+            Assert.Equal("CustomerPolicy", authorizeAttribute.Policy);
+        }
+
         public void Dispose()
         {
             _dbContext.Database.EnsureDeleted();

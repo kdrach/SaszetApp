@@ -70,11 +70,7 @@ var jwtEvents = new JwtBearerEvents
     }
 };
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = "AdminAuth";
-    options.DefaultChallengeScheme = "AdminAuth";
-})
+builder.Services.AddAuthentication()
 .AddJwtBearer("AdminAuth", options =>
 {
     options.MetadataAddress = $"{builder.Configuration["Jwt:AdminAuthority"]}/.well-known/openid-configuration";
@@ -84,7 +80,7 @@ builder.Services.AddAuthentication(options =>
     {
         ValidateIssuer = true,
         ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuerAdmin"] ?? builder.Configuration["Jwt:AdminAuthority"] },
-        ValidateAudience = false,
+        ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true
     };
@@ -100,7 +96,7 @@ builder.Services.AddAuthentication(options =>
     {
         ValidateIssuer = true,
         ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuerCustomer"] ?? builder.Configuration["Jwt:CustomerAuthority"] },
-        ValidateAudience = false,
+        ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true
     };

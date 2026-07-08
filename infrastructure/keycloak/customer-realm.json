@@ -20,8 +20,8 @@
       "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
       "redirectUris": [
-        "http://localhost:3010/*",
-        "https://saszet.app/*"
+        "http://localhost:3010/",
+        "https://saszet.app/"
       ],
       "webOrigins": [
         "http://localhost:3010",

@@ -349,6 +349,18 @@ namespace SaszetApp.Api.Tests
             Assert.True(dbNewPrimary.IsPrimary);
         }
 
+        [Fact]
+        public void Controller_RequiresAdminPolicy()
+        {
+            var authorizeAttribute = typeof(AdminProviderController)
+                .GetCustomAttributes(typeof(Microsoft.AspNetCore.Authorization.AuthorizeAttribute), true)
+                .Cast<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>()
+                .FirstOrDefault();
+
+            Assert.NotNull(authorizeAttribute);
+            Assert.Equal("AdminPolicy", authorizeAttribute.Policy);
+        }
+
         public void Dispose()
         {
             _dbContext.Database.EnsureDeleted();
