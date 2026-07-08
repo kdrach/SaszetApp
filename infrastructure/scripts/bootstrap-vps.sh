@@ -199,9 +199,31 @@ preflight_checks() {
 
   # .env.prod exists?
   if [ ! -f "$REPO_ROOT/.env.prod" ]; then
-    echo -e "${RED}  ❌ .env.prod not found at $REPO_ROOT/.env.prod${NC}"
-    echo "     Fix: cp .env.prod.example .env.prod && nano .env.prod"
-    FAILED=1
+    warn ".env.prod not found at $REPO_ROOT/.env.prod"
+    echo ""
+    # Offer to auto-generate
+    if [ -t 0 ]; then
+      # Interactive terminal — ask the user
+      read -r -p "  Would you like to auto-generate .env.prod with secure random secrets? [Y/n]: " GENERATE_ANSWER
+      GENERATE_ANSWER="${GENERATE_ANSWER:-Y}"
+      if [[ "$GENERATE_ANSWER" =~ ^[Yy] ]]; then
+        info "Delegating to generate-env.sh..."
+        chmod +x "$SCRIPT_DIR/generate-env.sh"
+        "$SCRIPT_DIR/generate-env.sh"
+        success ".env.prod auto-generated."
+      else
+        echo -e "${RED}  ❌ .env.prod is required.${NC}"
+        echo "     Fix: ./infrastructure/scripts/generate-env.sh"
+        echo "     Or:  cp .env.prod.example .env.prod && nano .env.prod"
+        FAILED=1
+      fi
+    else
+      # Non-interactive (piped/CI) — fail with instructions
+      echo -e "${RED}  ❌ .env.prod not found and running non-interactively.${NC}"
+      echo "     Fix: ./infrastructure/scripts/generate-env.sh --non-interactive --domain yourdomain.com --email you@email.com"
+      echo "     Or:  cp .env.prod.example .env.prod && nano .env.prod"
+      FAILED=1
+    fi
   else
     success ".env.prod found."
 
