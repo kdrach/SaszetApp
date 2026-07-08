@@ -49,10 +49,17 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
       KC_HOSTNAME_URL: http://localhost:8180
+      SMTP_HOST: "${SMTP_HOST?Error: SMTP_HOST is required}"
+      SMTP_PORT: "${SMTP_PORT?Error: SMTP_PORT is required}"
+      SMTP_USER: "${SMTP_USER?Error: SMTP_USER is required}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD?Error: SMTP_PASSWORD is required}"
+      SMTP_FROM: "${SMTP_FROM?Error: SMTP_FROM is required}"
     ports:
       - "8180:8080"
     volumes:
-      - ./infrastructure/keycloak/realm-export.json:/opt/keycloak/data/import/realm.json:ro
+      - ./infrastructure/keycloak/admin-realm.json:/opt/keycloak/data/import/admin-realm.json:ro
+      - ./infrastructure/keycloak/customer-realm.json:/opt/keycloak/data/import/customer-realm.json:ro
+      - ./infrastructure/keycloak/themes:/opt/keycloak/themes:ro
     depends_on:
       keycloak-db:
         condition: service_healthy
@@ -72,8 +79,10 @@ services:
       - "5000:8080"
     environment:
       - "ConnectionStrings__DefaultConnection=Host=app-db;Database=${POSTGRES_DB?Error: POSTGRES_DB is required};Username=${POSTGRES_USER?Error: POSTGRES_USER is required};Password=${POSTGRES_PASSWORD?Error: POSTGRES_PASSWORD is required}"
-      - Jwt__Authority=http://keycloak:8080/realms/petfood-realm
-      - Jwt__ValidIssuer=http://localhost:8180/realms/petfood-realm
+      - Jwt__AdminAuthority=http://keycloak:8080/realms/petfood-admin-realm
+      - Jwt__CustomerAuthority=http://keycloak:8080/realms/petfood-customer-realm
+      - Jwt__ValidIssuerAdmin=http://localhost:8180/realms/petfood-admin-realm
+      - Jwt__ValidIssuerCustomer=http://localhost:8180/realms/petfood-customer-realm
       - "ENCRYPTION_KEY=${ENCRYPTION_KEY?Error: ENCRYPTION_KEY is required}" # 32 bytes for AES-256
       - ASPNETCORE_HTTP_PORTS=8080
     depends_on:

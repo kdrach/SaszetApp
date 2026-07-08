@@ -11,7 +11,7 @@ namespace SaszetApp.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Microsoft.AspNetCore.Authorization.Authorize]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "CustomerPolicy")]
     public class ScanController : ControllerBase
     {
         private readonly AppDbContext _dbContext;
