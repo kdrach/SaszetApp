@@ -48,7 +48,7 @@ describe('AuthProvider', () => {
       expect(screen.getByTestId('auth-status')).toHaveTextContent('Authenticated');
     });
 
-    expect(keycloak.init).toHaveBeenCalledWith({ onLoad: 'check-sso', checkLoginIframe: false });
+    expect(keycloak.init).toHaveBeenCalledWith({ onLoad: 'login-required', checkLoginIframe: false });
     expect(screen.getByTestId('token')).toHaveTextContent('fake-token');
   });
 
