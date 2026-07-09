@@ -143,8 +143,7 @@ for domain in "${DOMAINS[@]}"; do
     --no-eff-email \
     --non-interactive \
     --keep-until-expiring \
-    -d "$domain" \
-    2>&1 | sed 's/^/    /'
+    -d "$domain"
   echo -e "${GREEN}  ✅ Certificate issued for $domain${NC}"
 done
 
