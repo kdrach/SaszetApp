@@ -112,7 +112,7 @@ done
 # ──────────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}▶ Starting nginx-proxy container...${NC}"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up --force-recreate -d nginx-proxy
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up --force-recreate -d nginx-proxy
 echo "  ⏳ Waiting 5s for Nginx to become ready..."
 sleep 5
 echo -e "${GREEN}  ✅ Nginx started.${NC}"
@@ -134,7 +134,7 @@ echo ""
 echo -e "${YELLOW}▶ Requesting real Let's Encrypt certificates...${NC}"
 for domain in "${DOMAINS[@]}"; do
   echo "  📜 Requesting cert for: $domain"
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm certbot certonly \
+  docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml run --rm certbot certonly \
     --webroot \
     --webroot-path=/var/www/certbot \
     $STAGING_FLAG \
@@ -151,7 +151,7 @@ done
 # ──────────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}▶ Reloading Nginx to activate real certificates...${NC}"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml exec nginx-proxy nginx -s reload
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml exec nginx-proxy nginx -s reload
 echo -e "${GREEN}  ✅ Nginx reloaded.${NC}"
 
 # ──────────────────────────────────────────────
