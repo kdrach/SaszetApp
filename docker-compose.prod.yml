@@ -35,7 +35,6 @@ services:
     command: start --import-realm
     ports: !override []
     environment:
-      KC_HOSTNAME: ${KC_HOSTNAME:-auth.saszet.app}
       KC_HOSTNAME_URL: https://${KC_HOSTNAME:-auth.saszet.app}
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
