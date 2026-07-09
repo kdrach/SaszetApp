@@ -170,8 +170,14 @@ preflight_checks() {
     success "Docker found: $(docker --version)"
   fi
 
-  # Docker daemon running?
-  if ! docker info &>/dev/null 2>&1; then
+  # Docker daemon running + accessible?
+  DOCKER_INFO_OUTPUT=$(docker info 2>&1) || true
+  if echo "$DOCKER_INFO_OUTPUT" | grep -qi "permission denied"; then
+    echo -e "${RED}  ❌ Docker permission denied — your user cannot access the Docker socket.${NC}"
+    echo "     Fix (option 1): sudo usermod -aG docker \$USER && newgrp docker"
+    echo "     Fix (option 2): Run this script with sudo"
+    FAILED=1
+  elif ! docker info &>/dev/null 2>&1; then
     echo -e "${RED}  ❌ Docker daemon is not running.${NC}"
     echo "     Fix: sudo systemctl start docker"
     FAILED=1
