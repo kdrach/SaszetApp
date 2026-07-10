@@ -2,7 +2,7 @@ import axios from 'axios';
 import keycloak from '../keycloak';
 import { LlmProvider, CreateProviderDto } from '../types';
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api`,
 });
 
@@ -10,7 +10,7 @@ api.interceptors.request.use(async (config) => {
   if (keycloak.token) {
     try {
       await keycloak.updateToken(30);
-      config.headers.Authorization = `Bearer ${keycloak.token}`;
+      config.headers.set('Authorization', `Bearer ${keycloak.token}`);
     } catch (error) {
       console.error('Failed to refresh token', error);
       keycloak.login();

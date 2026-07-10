@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { AuthProvider, useAuth } from './AuthProvider';
+import { AuthProvider, useAuth, __resetAuthInitForTests } from './AuthProvider';
 import keycloak from '../api/keycloak';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -31,6 +31,7 @@ const TestComponent = () => {
 describe('AuthProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetAuthInitForTests();
   });
 
   it('renders loading state initially and then authenticates', async () => {
