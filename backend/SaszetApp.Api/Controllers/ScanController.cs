@@ -26,6 +26,7 @@ namespace SaszetApp.Api.Controllers
         }
 
         [HttpGet("search")]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ScanRatePolicy")]
         public async Task<IActionResult> Search([FromQuery] string query)
         {
             if (string.IsNullOrWhiteSpace(query) || query.Length < 3)
@@ -44,7 +45,7 @@ namespace SaszetApp.Api.Controllers
 
             // Cache lookup
             var cachedEntity = await _dbContext.PetFoodItems
-                .Where(p => p.Language == language && (p.EanCode == query || p.ProductName.ToLower().Contains(query.ToLower())))
+                .Where(p => p.Language == language && (p.EanCode == query || p.ProductName.ToLower() == query.ToLower()))
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync();
 
