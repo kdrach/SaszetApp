@@ -348,13 +348,13 @@ wait_for_health() {
       -f "$REPO_ROOT/docker-compose.yml" \
       -f "$REPO_ROOT/docker-compose.prod.yml" \
       ps --format json 2>/dev/null \
-      | grep -i '"Health":"unhealthy"' | wc -l || echo "0")
+      | grep -c -i '"Health":"unhealthy"' || true)
 
     STARTING=$(docker compose --env-file "$REPO_ROOT/.env.prod" \
       -f "$REPO_ROOT/docker-compose.yml" \
       -f "$REPO_ROOT/docker-compose.prod.yml" \
       ps --format json 2>/dev/null \
-      | grep -iE '"Health":"(starting|unknown)"' | wc -l || echo "0")
+      | grep -c -iE '"Health":"(starting|unknown)"' || true)
 
     if [ "$UNHEALTHY" -gt 0 ]; then
       echo ""
