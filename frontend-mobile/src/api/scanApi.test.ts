@@ -1,33 +1,30 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fetchAnalysisResult } from './scanApi';
+import apiClient from './axios';
+
+vi.mock('./axios', () => {
+  return {
+    default: {
+      get: vi.fn(),
+    },
+  };
+});
 
 describe('scanApi', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
-  it('should resolve good response for english', async () => {
-    const promise = fetchAnalysisResult('good', 'en');
-    vi.advanceTimersByTime(4000);
-    const result = await promise;
-    expect(result.productName).toBe('GOOD');
-    expect(result.rating).toBe(8);
-  });
+  it('should call apiClient with correct parameters', async () => {
+    const mockData = { productName: 'REAL PRODUCT', rating: 10 };
+    (apiClient.get as any).mockResolvedValue({ data: mockData });
 
-  it('should resolve bad response when query contains bad', async () => {
-    const promise = fetchAnalysisResult('bad product', 'en');
-    vi.advanceTimersByTime(4000);
-    const result = await promise;
-    expect(result.rating).toBe(3);
-  });
-
-  it('should resolve bad response when query contains złe', async () => {
-    const promise = fetchAnalysisResult('złe', 'pl');
-    vi.advanceTimersByTime(4000);
-    const result = await promise;
-    expect(result.rating).toBe(3);
+    const result = await fetchAnalysisResult('real', 'en');
+    
+    expect(apiClient.get).toHaveBeenCalledWith('/Scan/search', {
+      params: { query: 'real' },
+      headers: { 'Accept-Language': 'en' }
+    });
+    expect(result).toEqual(mockData);
   });
 });
