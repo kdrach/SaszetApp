@@ -3,11 +3,10 @@
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # Key differences from the base compose:
-# - Internal services have NO host port bindings (only nginx-proxy exposes 80/443)
+# - Internal services have NO host port bindings (only caddy exposes 80/443)
 # - All services use restart: always
-# - Nginx reverse proxy + Certbot added
-# - Shared saszet-network defined
-# - certbot-conf and certbot-www volumes added for SSL
+# - Caddy reverse proxy added for automatic HTTPS
+# - caddy_data and caddy_config volumes added for SSL
 
 services:
 
@@ -127,7 +126,7 @@ services:
       - keycloak
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:2019/config/ > /dev/null || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
