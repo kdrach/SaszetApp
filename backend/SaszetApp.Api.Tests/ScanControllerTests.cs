@@ -172,6 +172,41 @@ namespace SaszetApp.Api.Tests
             _mockVlmService.Verify(v => v.AnalyzeImageAsync(It.IsAny<string>(), "image/jpeg", ScanMode.Ingredients, "pl"), Times.Once);
         }
 
+        [Fact]
+        public async Task AnalyzeImage_VlmThrowsNoPetFoodFound_Returns422UnprocessableEntity()
+        {
+            // Arrange
+            var mockFile = new Mock<IFormFile>();
+            var content = "fake image content"u8.ToArray();
+            mockFile.Setup(f => f.Length).Returns(content.Length);
+            mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
+            
+            var ms = new System.IO.MemoryStream(content);
+            mockFile.Setup(f => f.CopyToAsync(It.IsAny<System.IO.Stream>(), It.IsAny<System.Threading.CancellationToken>()))
+                .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
+                .Returns(Task.CompletedTask);
+
+            _controller.Request.Headers["Accept-Language"] = "pl-PL";
+
+            _mockVlmService
+                .Setup(v => v.AnalyzeImageAsync(It.IsAny<string>(), "image/jpeg", ScanMode.Ingredients, "pl"))
+                .ThrowsAsync(new InvalidOperationException("NO_PET_FOOD_FOUND"));
+
+            // Act
+            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients);
+
+            // Assert
+            var objectResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(422, objectResult.StatusCode);
+            
+            // Check dynamic property "errorCode"
+            var valueType = objectResult.Value.GetType();
+            var propertyInfo = valueType.GetProperty("errorCode");
+            Assert.NotNull(propertyInfo);
+            var errorCodeValue = propertyInfo.GetValue(objectResult.Value);
+            Assert.Equal("NO_PET_FOOD_FOUND", errorCodeValue);
+        }
+
 
         public void Dispose()
         {
