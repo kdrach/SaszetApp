@@ -76,12 +76,12 @@ builder.Services.AddAuthentication()
     options.MetadataAddress = $"{builder.Configuration["Jwt:AdminAuthority"]}/.well-known/openid-configuration";
     options.RequireHttpsMetadata = false; 
     
+    options.IncludeErrorDetails = true;
     options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
     {
         ValidateIssuer = true,
         ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuerAdmin"] ?? builder.Configuration["Jwt:AdminAuthority"] },
-        ValidateAudience = true,
-        ValidAudiences = new[] { "account", "saszetapp-admin" },
+        ValidateAudience = false,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true
     };
@@ -93,12 +93,12 @@ builder.Services.AddAuthentication()
     options.MetadataAddress = $"{builder.Configuration["Jwt:CustomerAuthority"]}/.well-known/openid-configuration";
     options.RequireHttpsMetadata = false; 
     
+    options.IncludeErrorDetails = true;
     options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
     {
         ValidateIssuer = true,
         ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuerCustomer"] ?? builder.Configuration["Jwt:CustomerAuthority"] },
-        ValidateAudience = true,
-        ValidAudiences = new[] { "account", "saszetapp-pwa" },
+        ValidateAudience = false,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true
     };
