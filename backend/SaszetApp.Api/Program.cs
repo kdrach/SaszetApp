@@ -173,10 +173,10 @@ app.UseHttpsRedirection();
 app.UseRouting();
 app.UseCors();
 
-app.UseRateLimiter();
-
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHealthChecks("/health");
