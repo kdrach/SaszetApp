@@ -40,7 +40,9 @@ export default function ScannerView() {
                     navigate(`/product/${encodeURIComponent(decodedText)}`);
                   }).catch((err) => {
                     stopPromiseRef.current = null;
-                    console.error(err);
+                    console.error("Failed to stop camera properly:", err);
+                    // MUST navigate anyway, otherwise user is stuck on black camera screen!
+                    navigate(`/product/${encodeURIComponent(decodedText)}`);
                   });
                 }
               },
