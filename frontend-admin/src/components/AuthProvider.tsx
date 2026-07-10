@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import keycloak from '../keycloak';
 import Keycloak from 'keycloak-js';
 
@@ -23,32 +23,29 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+let didInit = false;
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
-  const isRun = useRef(false);
+  const [token, setToken] = useState<string | undefined>(keycloak.token);
 
   useEffect(() => {
-    if (isRun.current) return;
-    isRun.current = true;
+    if (didInit) return;
+    didInit = true;
 
-    let isMounted = true;
-    
     keycloak.init({ onLoad: 'login-required', pkceMethod: 'S256' })
       .then((authenticated) => {
-        if (isMounted) {
-          setIsAuthenticated(authenticated);
-          setInitialized(true);
-          setIsLoading(false);
-        }
+        setIsAuthenticated(authenticated);
+        setInitialized(true);
+        setIsLoading(false);
+        setToken(keycloak.token);
       })
       .catch((error) => {
         console.error("Keycloak initialization failed", error);
-        if (isMounted) {
-          setInitialized(true);
-          setIsLoading(false);
-        }
+        setInitialized(true);
+        setIsLoading(false);
       });
 
     keycloak.onTokenExpired = () => {
@@ -58,16 +55,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     };
 
-    return () => {
-      isMounted = false;
-    };
+    keycloak.onAuthRefreshSuccess = () => setToken(keycloak.token);
+    keycloak.onAuthSuccess = () => setToken(keycloak.token);
   }, []);
 
   const login = () => keycloak.login();
   const logout = () => keycloak.logout();
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, login, logout, token: keycloak.token, keycloak, initialized }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, login, logout, token, keycloak, initialized }}>
       {children}
     </AuthContext.Provider>
   );

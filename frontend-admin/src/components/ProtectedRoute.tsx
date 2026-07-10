@@ -9,7 +9,20 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated, keycloak } = useAuth();
 
   if (!isAuthenticated) {
-    return null;
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-gray-100">
+        <div className="rounded-lg bg-white p-8 text-center shadow-xl">
+          <h1 className="mb-4 text-3xl font-bold text-red-600">Authentication Failed</h1>
+          <p className="mb-6 text-gray-600">Unable to authenticate with the server.</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (keycloak.hasRealmRole && !keycloak.hasRealmRole('admin')) {
