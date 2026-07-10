@@ -2,6 +2,9 @@
   "id": "petfood-customer-realm",
   "realm": "petfood-customer-realm",
   "enabled": true,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["pl", "en"],
+  "defaultLocale": "pl",
   "registrationAllowed": true,
   "verifyEmail": true,
   "loginTheme": "saszet-theme",
@@ -20,8 +23,8 @@
       "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
       "redirectUris": [
-        "http://localhost:3010/",
-        "https://saszet.app/"
+        "http://localhost:3010/*",
+        "https://saszet.app/*"
       ],
       "webOrigins": [
         "http://localhost:3010",

@@ -9,8 +9,8 @@
 # Options:
 #   --skip-cleanup   Skip Step 2: cleanup old deployment (recommended for a truly fresh VPS)
 #   --skip-build     Skip Step 4: Docker image build (config-only redeployment)
-#   --skip-ssl       Skip Step 5: SSL certificate initialization (if certs already valid)
-#   --staging        Use Let's Encrypt staging server (avoids rate limits during testing)
+#   --skip-build     Skip Step 4: Docker image build (config-only redeployment)
+#   --staging        (Deprecated) Caddy handles SSL automatically, flag ignored
 #   --help           Print this help and exit
 
 set -euo pipefail
@@ -28,7 +28,6 @@ LOG_FILE="$LOG_DIR/bootstrap-${TIMESTAMP}.log"
 # Flags
 SKIP_CLEANUP=0
 SKIP_BUILD=0
-SKIP_SSL=0
 STAGING=""
 
 # ANSI color codes
@@ -99,8 +98,7 @@ ${BOLD}USAGE${NC}
 ${BOLD}OPTIONS${NC}
   --skip-cleanup   Skip Step 2: cleanup old deployment (use on a fresh VPS)
   --skip-build     Skip Step 4: Docker image build (config-only redeploy)
-  --skip-ssl       Skip Step 5: SSL initialization (certs already valid)
-  --staging        Use Let's Encrypt staging (avoids rate limits during testing)
+  --staging        (Deprecated) Caddy handles SSL automatically, flag ignored
   --help           Show this help and exit
 
 ${BOLD}EXAMPLES${NC}
@@ -111,7 +109,7 @@ ${BOLD}EXAMPLES${NC}
   ./infrastructure/scripts/bootstrap-vps.sh --skip-cleanup --staging
 
   # Redeploy without rebuilding images
-  ./infrastructure/scripts/bootstrap-vps.sh --skip-cleanup --skip-ssl --skip-build
+  ./infrastructure/scripts/bootstrap-vps.sh --skip-cleanup --skip-build
 
 ${BOLD}REQUIREMENTS${NC}
   - Docker Engine + Docker Compose v2
@@ -126,7 +124,6 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --skip-cleanup) SKIP_CLEANUP=1; shift ;;
     --skip-build)   SKIP_BUILD=1;   shift ;;
-    --skip-ssl)     SKIP_SSL=1;     shift ;;
     --staging)      STAGING="--staging"; shift ;;
     --help|-h)      print_help; exit 0 ;;
     *)
@@ -318,46 +315,6 @@ else
   success "Docker images built."
 fi
 
-# ══════════════════════════════════════════════════════════════════════════════
-# STEP 5 — INIT SSL CERTIFICATES
-# ══════════════════════════════════════════════════════════════════════════════
-
-step "STEP 5 — SSL CERTIFICATES"
-
-if [ "$SKIP_SSL" -eq 1 ]; then
-  warn "Skipping SSL initialization (--skip-ssl flag set)."
-else
-  # Check if valid certs already exist for 30+ more days
-  CERT_PATH="$REPO_ROOT/certbot-conf/live/${DOMAIN}/fullchain.pem"
-  SSL_SKIP_REASON=""
-
-  if [ -f "$CERT_PATH" ]; then
-    # Get expiry date
-    EXPIRY=$(openssl x509 -enddate -noout -in "$CERT_PATH" 2>/dev/null \
-      | sed 's/notAfter=//' || echo "")
-
-    if [ -n "$EXPIRY" ]; then
-      EXPIRY_EPOCH=$(date -d "$EXPIRY" +%s 2>/dev/null || date -j -f "%b %d %T %Y %Z" "$EXPIRY" +%s 2>/dev/null || echo 0)
-      NOW_EPOCH=$(date +%s)
-      DAYS_LEFT=$(( (EXPIRY_EPOCH - NOW_EPOCH) / 86400 ))
-
-      if [ "$DAYS_LEFT" -gt 30 ]; then
-        SSL_SKIP_REASON="Cert is valid for $DAYS_LEFT more days (>30 threshold)"
-      else
-        warn "Cert expires in $DAYS_LEFT days — will renew."
-      fi
-    fi
-  fi
-
-  if [ -n "$SSL_SKIP_REASON" ]; then
-    info "SSL initialization skipped: $SSL_SKIP_REASON"
-  else
-    info "Initializing SSL certificates via Let's Encrypt..."
-    chmod +x "$SCRIPT_DIR/init-letsencrypt.sh"
-    "$SCRIPT_DIR/init-letsencrypt.sh" --email "$CERTBOT_EMAIL" --domain "$DOMAIN" $STAGING
-    success "SSL certificates initialized."
-  fi
-fi
 
 # ══════════════════════════════════════════════════════════════════════════════
 # STEP 6 — START ALL CONTAINERS

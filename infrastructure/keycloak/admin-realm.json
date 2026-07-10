@@ -2,7 +2,11 @@
   "id": "petfood-admin-realm",
   "realm": "petfood-admin-realm",
   "enabled": true,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["pl", "en"],
+  "defaultLocale": "pl",
   "registrationAllowed": false,
+  "loginTheme": "saszet-theme",
   "roles": {
     "realm": [
       {
