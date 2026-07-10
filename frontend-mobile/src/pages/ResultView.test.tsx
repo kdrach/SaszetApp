@@ -46,4 +46,18 @@ describe('ResultView', () => {
       expect(screen.getByText('Test Product')).toBeInTheDocument();
     });
   });
+
+  it('renders error popup when fetch fails', async () => {
+    vi.spyOn(scanApi, 'fetchAnalysisResult').mockRejectedValue(new Error('Network error'));
+
+    render(
+      <MemoryRouter initialEntries={['/product/123']}>
+        <Routes>
+          <Route path="/product/:id" element={<ResultView />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('scan_error')).toBeInTheDocument();
+  });
 });

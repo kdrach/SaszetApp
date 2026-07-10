@@ -25,6 +25,7 @@ export default function ResultView() {
     }
     
     let ignore = false;
+    setError(null);
     setLoading(true);
     
     fetchAnalysisResult(id, i18n.language)
