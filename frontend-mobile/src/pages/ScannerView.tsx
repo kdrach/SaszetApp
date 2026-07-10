@@ -94,7 +94,7 @@ export default function ScannerView() {
   const toggleFlashlight = async () => {
     if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
       try {
-        await html5QrCodeRef.current.applyVideoConstraints({ advanced: [{ torch: !torchOn }] });
+        await html5QrCodeRef.current.applyVideoConstraints({ advanced: [{ torch: !torchOn } as any] });
         setTorchOn(!torchOn);
       } catch (err) {
         console.error("Torch not supported", err);
