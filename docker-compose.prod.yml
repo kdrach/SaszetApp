@@ -44,6 +44,7 @@ services:
       SMTP_USER: "${SMTP_USER}"
       SMTP_PASSWORD: "${SMTP_PASSWORD}"
       SMTP_FROM: "${SMTP_FROM}"
+      FRONTEND_URL: "https://${DOMAIN:-saszet.app}"
     volumes:
       - ./infrastructure/keycloak/admin-realm.json:/opt/keycloak/data/import/admin-realm.json:ro
       - ./infrastructure/keycloak/customer-realm.json:/opt/keycloak/data/import/customer-realm.json:ro
