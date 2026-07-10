@@ -1,10 +1,10 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { useKeycloak } from '@react-keycloak/web';
+import { useAuth } from '../components/AuthProvider';
 import { LogOut, Activity } from 'lucide-react';
 
 const AdminLayout: React.FC = () => {
-  const { keycloak } = useKeycloak();
+  const { keycloak } = useAuth();
 
   const handleLogout = () => {
     keycloak.logout();

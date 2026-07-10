@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { ReactKeycloakProvider } from '@react-keycloak/web';
+import { AuthProvider } from './components/AuthProvider';
 import App from './App';
 import keycloak from './keycloak';
 import './index.css';
@@ -11,13 +11,9 @@ if (rootElement) {
   
   root.render(
     <React.StrictMode>
-      <ReactKeycloakProvider 
-        authClient={keycloak}
-        initOptions={{ onLoad: 'login-required', pkceMethod: 'S256' }}
-        LoadingComponent={<div className="flex items-center justify-center min-h-screen bg-background">Loading authentication...</div>}
-      >
+      <AuthProvider>
         <App />
-      </ReactKeycloakProvider>
+      </AuthProvider>
     </React.StrictMode>
   );
 }

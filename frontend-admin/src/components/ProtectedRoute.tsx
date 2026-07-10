@@ -1,13 +1,13 @@
 import React from 'react';
 
-import { useKeycloak } from '@react-keycloak/web';
+import { useAuth } from './AuthProvider';
 
 interface ProtectedRouteProps {
   children: React.ReactElement;
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { keycloak } = useKeycloak();
+  const { keycloak } = useAuth();
 
   React.useEffect(() => {
     if (!keycloak.authenticated) {
