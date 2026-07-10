@@ -148,7 +148,7 @@ export default function ResultView() {
                 {t('pros')}
               </h3>
               <ul className="space-y-2">
-                {result.pros.map((pro, idx) => (
+                {(result.pros || []).map((pro, idx) => (
                   <li key={idx} className="flex items-start">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 mr-3 flex-shrink-0"></span>
                     <span className="text-gray-700 leading-snug">{pro}</span>
@@ -165,7 +165,7 @@ export default function ResultView() {
                 {t('cons')}
               </h3>
               <ul className="space-y-2">
-                {result.cons.map((con, idx) => (
+                {(result.cons || []).map((con, idx) => (
                   <li key={idx} className="flex items-start">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-500 mt-2 mr-3 flex-shrink-0"></span>
                     <span className="text-gray-700 leading-snug">{con}</span>
