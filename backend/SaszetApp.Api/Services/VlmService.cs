@@ -102,6 +102,7 @@ namespace SaszetApp.Api.Services
                 systemPrompt = $"You are a pet food analyst. The user will provide a photo of the ingredients label. " +
                                $"Analyze the ingredients accurately. Return ONLY a JSON object exactly matching this structure: " +
                                $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
+                               $"If the image does not contain pet food packaging or an ingredients list, return exactly: {{\"errorCode\": \"NO_PET_FOOD_FOUND\"}}. " +
                                $"All text values (except productName) MUST be in the '{language}' language.";
             }
             else
@@ -109,6 +110,7 @@ namespace SaszetApp.Api.Services
                 systemPrompt = $"You are a pet food analyst. The user will provide a photo of the pet food package. " +
                                $"Recognize the brand and product and review its dietary properties. Return ONLY a JSON object exactly matching this structure: " +
                                $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
+                               $"If the image does not contain pet food packaging or an ingredients list, return exactly: {{\"errorCode\": \"NO_PET_FOOD_FOUND\"}}. " +
                                $"All text values (except productName) MUST be in the '{language}' language.";
             }
 
@@ -117,6 +119,11 @@ namespace SaszetApp.Api.Services
             var match = Regex.Match(jsonResponse, @"(?is)```(?:json)?\s*(.*?)\s*```");
             if (match.Success) jsonResponse = match.Groups[1].Value;
             jsonResponse = jsonResponse.Trim();
+
+            if (jsonResponse.Contains("\"errorCode\"") && jsonResponse.Contains("NO_PET_FOOD_FOUND"))
+            {
+                throw new InvalidOperationException("NO_PET_FOOD_FOUND");
+            }
 
             var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (vlmResponse == null) throw new InvalidOperationException("Failed to parse VLM response.");

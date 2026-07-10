@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Flashlight, Camera, Barcode } from 'lucide-react';
+import { ArrowLeft, Flashlight, Camera, Barcode, Image as ImageIcon } from 'lucide-react';
 import clsx from 'clsx';
 import { compressImage } from '../utils/imageUtils';
 
@@ -14,6 +14,8 @@ export default function ScannerView() {
   const stopPromiseRef = useRef<Promise<void> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoScanMode, setPhotoScanMode] = useState<'Ingredients' | 'General'>('Ingredients');
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
 
   useEffect(() => {
     let html5QrCode: Html5Qrcode;
@@ -30,6 +32,7 @@ export default function ScannerView() {
           if (!isMounted) return;
           setHasPermission(true);
           html5QrCode = new Html5Qrcode("reader");
+          html5QrCodeRef.current = html5QrCode;
           isStarting = true;
           
           if (mode === 'ean') {
@@ -76,9 +79,10 @@ export default function ScannerView() {
 
     return () => {
       isMounted = false;
-      if (html5QrCode && !isStarting && html5QrCode.isScanning && !stopPromiseRef.current) {
-        stopPromiseRef.current = html5QrCode.stop().then(() => {
+      if (html5QrCodeRef.current && !isStarting && html5QrCodeRef.current.isScanning && !stopPromiseRef.current) {
+        stopPromiseRef.current = html5QrCodeRef.current.stop().then(() => {
           stopPromiseRef.current = null;
+          html5QrCodeRef.current = null;
         }).catch((err) => {
           stopPromiseRef.current = null;
           console.error(err);
@@ -87,10 +91,45 @@ export default function ScannerView() {
     };
   }, [mode, navigate]);
 
+  const toggleFlashlight = async () => {
+    if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+      try {
+        await html5QrCodeRef.current.applyVideoConstraints({ advanced: [{ torch: !torchOn }] });
+        setTorchOn(!torchOn);
+      } catch (err) {
+        console.error("Torch not supported", err);
+      }
+    }
+  };
+
   const triggerFileInput = (pmode: 'Ingredients' | 'General') => {
     setPhotoScanMode(pmode);
     if (fileInputRef.current) {
       fileInputRef.current.click();
+    }
+  };
+
+  const captureFrameFromVideo = async (pmode: 'Ingredients' | 'General') => {
+    const video = document.querySelector('#reader video') as HTMLVideoElement;
+    if (!video) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0);
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          try {
+            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+            const compressedBlob = await compressImage(file);
+            navigate('/product/photo', { state: { imageBlob: compressedBlob, scanMode: pmode } });
+          } catch (error) {
+            console.error('Failed to compress image:', error);
+          }
+        }
+      }, 'image/jpeg', 0.95);
     }
   };
 
@@ -112,7 +151,7 @@ export default function ScannerView() {
         <button onClick={() => navigate(-1)} className="text-white p-2 rounded-full bg-black/40 backdrop-blur-md active:scale-95 transition-transform">
           <ArrowLeft size={24} />
         </button>
-        <button className="text-white p-2 rounded-full bg-black/40 backdrop-blur-md active:scale-95 transition-transform">
+        <button onClick={toggleFlashlight} className={clsx("p-2 rounded-full backdrop-blur-md active:scale-95 transition-transform", torchOn ? "bg-yellow-400 text-black" : "bg-black/40 text-white")}>
           <Flashlight size={24} />
         </button>
       </div>
@@ -169,18 +208,35 @@ export default function ScannerView() {
 
         {mode === 'photo' && (
           <div className="flex flex-col space-y-4 px-6 w-full max-w-sm mx-auto">
-            <button 
-              onClick={() => triggerFileInput('Ingredients')}
-              className="bg-[var(--color-primary)] text-white py-4 rounded-xl font-semibold shadow-lg active:scale-95 transition-transform"
-            >
-              {t('scanIngredients')}
-            </button>
-            <button 
-              onClick={() => triggerFileInput('General')}
-              className="bg-gray-800 text-white py-4 rounded-xl font-semibold shadow-lg border border-gray-700 active:scale-95 transition-transform"
-            >
-              {t('scanFrontPackaging')}
-            </button>
+            <div className="flex space-x-3">
+              <button 
+                onClick={() => captureFrameFromVideo('Ingredients')}
+                className="flex-1 bg-[var(--color-primary)] text-white py-4 rounded-xl font-semibold shadow-lg active:scale-95 transition-transform"
+              >
+                {t('scanIngredients')}
+              </button>
+              <button 
+                onClick={() => triggerFileInput('Ingredients')}
+                className="bg-[var(--color-primary)]/20 text-[var(--color-primary)] p-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center"
+              >
+                <ImageIcon size={24} />
+              </button>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button 
+                onClick={() => captureFrameFromVideo('General')}
+                className="flex-1 bg-gray-800 text-white py-4 rounded-xl font-semibold shadow-lg border border-gray-700 active:scale-95 transition-transform"
+              >
+                {t('scanFrontPackaging')}
+              </button>
+              <button 
+                onClick={() => triggerFileInput('General')}
+                className="bg-gray-800 text-white p-4 rounded-xl shadow-lg border border-gray-700 active:scale-95 transition-transform flex items-center justify-center"
+              >
+                <ImageIcon size={24} />
+              </button>
+            </div>
             <input
               type="file"
               accept="image/*"
