@@ -136,13 +136,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - saszet-network
-
-# ── Shared Networks ─────────────────────────────────────────────────────────
-networks:
-  saszet-network:
-    driver: bridge
 
 # ── Volumes ─────────────────────────────────────────────────────────────────
 volumes:
