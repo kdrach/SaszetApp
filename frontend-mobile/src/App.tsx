@@ -3,6 +3,7 @@ import HomeView from './pages/HomeView';
 import ScannerView from './pages/ScannerView';
 import ResultView from './pages/ResultView';
 import BottomTabBar from './components/BottomTabBar';
+import NetworkLogger from './components/NetworkLogger';
 import { useTranslation } from 'react-i18next';
 
 
@@ -11,6 +12,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <NetworkLogger />
       <div className="flex flex-col min-h-screen bg-[var(--color-background)]">
         <div className="flex-1 overflow-x-hidden overflow-y-auto pb-20">
           <Routes>
