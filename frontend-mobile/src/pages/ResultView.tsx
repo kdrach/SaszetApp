@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Share, CheckCircle2, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Share, CheckCircle2, XCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { fetchAnalysisResult } from '../api/scanApi';
 import { VLMResponseContract } from '../types';
 import LoadingOverlay from '../components/LoadingOverlay';
@@ -15,6 +15,7 @@ export default function ResultView() {
   
   const [loading, setLoading] = useState(!!id);
   const [result, setResult] = useState<VLMResponseContract | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [ingredientsExpanded, setIngredientsExpanded] = useState(false);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export default function ResultView() {
     }
     
     let ignore = false;
+    setError(null);
     setLoading(true);
     
     fetchAnalysisResult(id, i18n.language)
@@ -41,6 +43,8 @@ export default function ResultView() {
       .catch(err => {
         if (!ignore) {
           console.error(err);
+          const errorMsg = err?.response?.data?.message || err?.response?.statusText || err?.message || 'Wystąpił błąd podczas skanowania.';
+          setError(errorMsg);
         }
       })
       .finally(() => {
@@ -58,9 +62,27 @@ export default function ResultView() {
     return <LoadingOverlay />;
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center p-6">
+        <div className="bg-white p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-red-100 max-w-sm w-full text-center">
+          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle size={32} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-3">{t('scan_error') || 'Błąd skanowania'}</h2>
+          <p className="text-gray-500 mb-8 leading-relaxed">{error}</p>
+          <button onClick={() => navigate(-1)} className="w-full px-6 py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-md active:scale-95 transition-transform flex items-center justify-center">
+            <ArrowLeft size={20} className="mr-2" />
+            {t('go_back')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!id) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center p-6">
         <p className="text-xl text-gray-500 mb-6 text-center">{t('invalid_product_id')}</p>
         <button onClick={() => navigate(-1)} className="px-6 py-3 bg-[var(--color-primary)] text-white rounded-xl font-semibold shadow-lg active:scale-95 transition-transform">
           {t('go_back')}
@@ -71,7 +93,7 @@ export default function ResultView() {
 
   if (!result) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center p-6">
         <p className="text-xl text-gray-500 mb-6 text-center">{t('product_not_found')}</p>
         <button onClick={() => navigate(-1)} className="px-6 py-3 bg-[var(--color-primary)] text-white rounded-xl font-semibold shadow-lg active:scale-95 transition-transform">
           {t('go_back')}
