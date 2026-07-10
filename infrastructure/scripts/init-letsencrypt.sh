@@ -123,8 +123,13 @@ echo -e "${GREEN}  ✅ Nginx started.${NC}"
 echo ""
 echo -e "${YELLOW}▶ Removing temporary self-signed certificates...${NC}"
 for domain in "${DOMAINS[@]}"; do
-  rm -rf "$LETSENCRYPT_DIR/live/$domain"
-  echo -e "${GREEN}  ✅ Dummy cert for $domain removed.${NC}"
+  # If privkey is a symlink, it means Certbot has previously issued real certs. Do NOT delete them.
+  if [ -d "$LETSENCRYPT_DIR/live/$domain" ] && [ ! -L "$LETSENCRYPT_DIR/live/$domain/privkey.pem" ]; then
+    rm -rf "$LETSENCRYPT_DIR/live/$domain"
+    echo -e "${GREEN}  ✅ Dummy cert for $domain removed.${NC}"
+  else
+    echo "  ℹ️  Keeping real certificate structure for $domain."
+  fi
 done
 
 # ──────────────────────────────────────────────
