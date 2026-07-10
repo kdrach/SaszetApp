@@ -6,7 +6,7 @@
   "supportedLocales": ["pl", "en"],
   "defaultLocale": "pl",
   "registrationAllowed": true,
-  "verifyEmail": true,
+  "verifyEmail": false,
   "loginTheme": "saszet-theme",
   "smtpServer": {
     "host": "${env.SMTP_HOST}",
