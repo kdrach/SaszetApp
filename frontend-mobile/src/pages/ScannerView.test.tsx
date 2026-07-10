@@ -24,10 +24,12 @@ describe('ScannerView', () => {
     expect(await screen.findByText('modeEan')).toBeInTheDocument();
   });
   
-  it('changes mode to photo', async () => {
+  it('changes mode to photo and shows upload buttons', async () => {
     render(<BrowserRouter><ScannerView /></BrowserRouter>);
     const photoModeBtn = await screen.findByText('modePhoto');
     fireEvent.click(photoModeBtn);
     expect(await screen.findByText('takePhoto')).toBeInTheDocument();
+    expect(await screen.findByText('scanIngredients')).toBeInTheDocument();
+    expect(await screen.findByText('scanFrontPackaging')).toBeInTheDocument();
   });
 });

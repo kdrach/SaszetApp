@@ -19,3 +19,7 @@
 - Implemented Home view with recent scans (persisted via Zustand).
 - Implemented Scanner view with full-screen immersive camera UI.
 - Implemented Result view displaying VLM output with dynamic gradients.
+- **Photo Mode (Epic #87)**:
+  - Added HTML5 `<canvas>`-based image compression (`imageUtils.ts`) to reduce upload payloads.
+  - Implemented Photo Mode UI in `ScannerView` allowing file capture for Ingredients or General scanning.
+  - Updated `ResultView` and `scanApi.ts` to support multipart `FormData` uploads to the backend.

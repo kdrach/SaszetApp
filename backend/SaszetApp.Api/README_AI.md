@@ -22,3 +22,7 @@ This is a standard .NET 10.0 ASP.NET Core Web API project using Controllers and 
   - Added `ScanController` with localized caching logic based on `Accept-Language` headers and VLM fallback.
   - Implemented `VlmService` with real HTTP clients for OpenAI, Anthropic, and Gemini.
   - Added `AdminProviderController` secured by the `admin` role claim to manage encrypted LLM API keys via `EncryptionService`.
+- **Photo Mode (Epic #87)**:
+  - Added `ScanMode` enum to differentiate between Ingredients (OCR focus) and General package (Product recognition focus).
+  - Added `[HttpPost("analyze-image")]` endpoint in `ScanController` to process direct photo uploads as base64 memory streams without persistent storage.
+  - Adapted `IVlmService` and `VlmService` to construct multimodal payloads using `inlineData` / `image_url` depending on the LLM provider (OpenAI, Anthropic, Gemini).
