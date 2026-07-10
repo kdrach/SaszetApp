@@ -35,7 +35,7 @@
         </#if>
 
         <#if displayMessage && message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
-            <div class="mb-6 p-3 rounded-md text-sm font-medium text-center ${message.type = 'success'?string('bg-green-50 text-green-800', message.type = 'error'?string('bg-red-50 text-red-800', 'bg-blue-50 text-blue-800'))}">
+            <div class="mb-6 p-3 rounded-md text-sm font-medium text-center ${(message.type == 'success')?string('bg-green-50 text-green-800', (message.type == 'error')?string('bg-red-50 text-red-800', 'bg-blue-50 text-blue-800'))}">
                 ${kcSanitize(message.summary)?no_esc}
             </div>
         </#if>
