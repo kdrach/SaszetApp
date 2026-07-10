@@ -19,5 +19,7 @@
   "go_back": "Go Back",
   "profile_placeholder": "Profile Placeholder",
   "scanIngredients": "Scan ingredients label",
-  "scanFrontPackaging": "Scan front packaging"
+  "scanFrontPackaging": "Scan front packaging",
+  "no_pet_food_found": "No pet food found in the photo. Please try again with a clearer shot.",
+  "chooseFromGallery": "Choose from gallery"
 }

@@ -92,6 +92,10 @@ namespace SaszetApp.Api.Controllers
                 var result = await _vlmService.AnalyzeImageAsync(base64Image, image.ContentType, mode, language);
                 return Ok(result);
             }
+            catch (InvalidOperationException ex) when (ex.Message == "NO_PET_FOOD_FOUND")
+            {
+                return StatusCode(422, new { errorCode = "NO_PET_FOOD_FOUND" });
+            }
             catch (Exception)
             {
                 return StatusCode(500, new { message = "Error analyzing image." });

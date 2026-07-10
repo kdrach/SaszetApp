@@ -47,8 +47,12 @@ export default function ResultView() {
         .catch(err => {
           if (!ignore) {
             console.error(err);
-            const errorMsg = err?.response?.data?.message || err?.response?.statusText || err?.message || 'Wystąpił błąd podczas skanowania zdjęcia.';
-            setError(errorMsg);
+            if (err?.response?.status === 422 && err?.response?.data?.errorCode === 'NO_PET_FOOD_FOUND') {
+              setError(t('no_pet_food_found'));
+            } else {
+              const errorMsg = err?.response?.data?.message || err?.response?.statusText || err?.message || 'Wystąpił błąd podczas skanowania zdjęcia.';
+              setError(errorMsg);
+            }
           }
         })
         .finally(() => {
