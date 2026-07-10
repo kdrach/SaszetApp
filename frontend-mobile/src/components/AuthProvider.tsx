@@ -18,23 +18,27 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+export let didInit = false;
+export const __resetAuthInitForTests = () => { didInit = false; };
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [token, setToken] = useState<string | undefined>(keycloak.token);
 
   useEffect(() => {
-    let isMounted = true;
-    
+    if (didInit) return;
+    didInit = true;
+
     keycloak.init({ onLoad: 'login-required', checkLoginIframe: false })
       .then((authenticated) => {
-        if (isMounted) {
-          setIsAuthenticated(authenticated);
-          setIsLoading(false);
-        }
+        setIsAuthenticated(authenticated);
+        setIsLoading(false);
+        setToken(keycloak.token);
       })
       .catch((error) => {
         console.error("Keycloak initialization failed", error);
-        if (isMounted) setIsLoading(false);
+        setIsLoading(false);
       });
 
     keycloak.onTokenExpired = () => {
@@ -44,16 +48,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     };
 
-    return () => {
-      isMounted = false;
-    };
+    keycloak.onAuthRefreshSuccess = () => setToken(keycloak.token);
+    keycloak.onAuthSuccess = () => setToken(keycloak.token);
   }, []);
 
   const login = () => keycloak.login();
   const logout = () => keycloak.logout();
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, login, logout, token: keycloak.token }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, login, logout, token }}>
       {children}
     </AuthContext.Provider>
   );

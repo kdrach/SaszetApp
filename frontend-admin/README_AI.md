@@ -10,7 +10,7 @@
 
 ## Core Patterns & Rules
 - **Testing**: Vitest + React Testing Library are used. Tests should be named `*.test.tsx`.
-- **Auth**: Fully secured by Keycloak via `@react-keycloak/web`. Token checks must wrap protected views.
+- **Auth**: Fully secured by Keycloak via `keycloak-js`. Token checks must wrap protected views.
 - **State**: Currently relies on React's local state, as the scope is limited to config management.
 - Always use the predefined Tailwind CSS variables located in `index.css`.
 
