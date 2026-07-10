@@ -81,7 +81,8 @@ builder.Services.AddAuthentication()
     {
         ValidateIssuer = true,
         ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuerAdmin"] ?? builder.Configuration["Jwt:AdminAuthority"] },
-        ValidateAudience = false,
+        ValidateAudience = true,
+        ValidAudiences = new[] { "account", "saszetapp-admin" },
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true
     };
@@ -98,7 +99,8 @@ builder.Services.AddAuthentication()
     {
         ValidateIssuer = true,
         ValidIssuers = new[] { builder.Configuration["Jwt:ValidIssuerCustomer"] ?? builder.Configuration["Jwt:CustomerAuthority"] },
-        ValidateAudience = false,
+        ValidateAudience = true,
+        ValidAudiences = new[] { "account", "saszetapp-pwa" },
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true
     };
