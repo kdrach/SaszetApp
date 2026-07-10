@@ -5,7 +5,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import * as scanApi from '../api/scanApi';
 
 vi.mock('../api/scanApi', () => ({
-  fetchAnalysisResult: vi.fn()
+  fetchAnalysisResult: vi.fn(),
+  uploadImageForAnalysis: vi.fn()
 }));
 
 vi.mock('react-i18next', () => ({
@@ -59,5 +60,24 @@ describe('ResultView', () => {
     );
 
     expect(await screen.findByText('scan_error')).toBeInTheDocument();
+  });
+
+  it('renders no_pet_food_found error when 422 with NO_PET_FOOD_FOUND errorCode is returned', async () => {
+    vi.spyOn(scanApi, 'uploadImageForAnalysis').mockRejectedValue({
+      response: {
+        status: 422,
+        data: { errorCode: 'NO_PET_FOOD_FOUND' }
+      }
+    });
+
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/product/photo', state: { imageBlob: new Blob(), scanMode: 'Ingredients' } }]}>
+        <Routes>
+          <Route path="/product/:id?" element={<ResultView />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('no_pet_food_found')).toBeInTheDocument();
   });
 });
