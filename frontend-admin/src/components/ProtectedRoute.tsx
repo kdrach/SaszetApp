@@ -1,5 +1,4 @@
 import React from 'react';
-
 import { useAuth } from './AuthProvider';
 
 interface ProtectedRouteProps {
@@ -7,15 +6,9 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { keycloak } = useAuth();
+  const { isAuthenticated, keycloak } = useAuth();
 
-  React.useEffect(() => {
-    if (!keycloak.authenticated) {
-      keycloak.login();
-    }
-  }, [keycloak]);
-
-  if (!keycloak.authenticated) {
+  if (!isAuthenticated) {
     return null;
   }
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import keycloak from '../keycloak';
 import Keycloak from 'keycloak-js';
 
@@ -27,8 +27,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const isRun = useRef(false);
 
   useEffect(() => {
+    if (isRun.current) return;
+    isRun.current = true;
+
     let isMounted = true;
     
     keycloak.init({ onLoad: 'login-required', pkceMethod: 'S256' })
