@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using SaszetApp.Api.Data;
 using System.Security.Claims;
 
@@ -38,6 +40,23 @@ builder.Services.AddSingleton<SaszetApp.Api.Services.IEncryptionService, SaszetA
 builder.Services.AddScoped<SaszetApp.Api.Services.IVlmService, SaszetApp.Api.Services.VlmService>();
 builder.Services.AddHttpClient(); // Add HttpClient factory for VLM service
 builder.Services.AddHealthChecks();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("ScanRatePolicy", context =>
+    {
+        // Use NameIdentifier (sub claim) to uniquely identify users
+        var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(userId, _ =>
+            new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+});
 
 var jwtEvents = new JwtBearerEvents
 {
@@ -153,6 +172,8 @@ app.UseHttpsRedirection();
 
 app.UseRouting();
 app.UseCors();
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
