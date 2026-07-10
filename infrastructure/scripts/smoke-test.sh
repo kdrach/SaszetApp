@@ -51,7 +51,8 @@ check() {
 echo -e "${YELLOW}▶ Testing HTTPS subdomains...${NC}"
 check "https://$DOMAIN"          "200" "saszet.app (mobile PWA)"
 check "https://api.$DOMAIN/health" "200" "api.saszet.app/health (backend API)"
-check "https://auth.$DOMAIN/realms/petfood-realm" "200" "auth.saszet.app (Keycloak realm)"
+check "https://auth.$DOMAIN/realms/petfood-admin-realm" "200" "auth.saszet.app (Admin realm)"
+check "https://auth.$DOMAIN/realms/petfood-customer-realm" "200" "auth.saszet.app (Customer realm)"
 check "https://admin.$DOMAIN"    "200" "admin.saszet.app (admin PWA)"
 
 # ──────────────────────────────────────────────
