@@ -17,5 +17,7 @@
   "invalid_product_id": "Nieprawidłowe ID produktu.",
   "product_not_found": "Nie znaleziono produktu.",
   "go_back": "Wróć",
-  "profile_placeholder": "Miejsce na profil"
+  "profile_placeholder": "Miejsce na profil",
+  "scanIngredients": "Skanuj etykietę ze składem",
+  "scanFrontPackaging": "Skanuj front opakowania"
 }
