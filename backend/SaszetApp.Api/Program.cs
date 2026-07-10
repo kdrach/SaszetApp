@@ -70,7 +70,11 @@ var jwtEvents = new JwtBearerEvents
     }
 };
 
-builder.Services.AddAuthentication()
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = "AdminAuth";
+    options.DefaultChallengeScheme = "AdminAuth";
+})
 .AddJwtBearer("AdminAuth", options =>
 {
     options.MetadataAddress = $"{builder.Configuration["Jwt:AdminAuthority"]}/.well-known/openid-configuration";
@@ -133,7 +137,15 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseRouting();
 app.UseCors();
+
+app.Use(async (context, next) =>
+{
+    var hasAuth = context.Request.Headers.ContainsKey("Authorization");
+    Console.WriteLine($"[DEBUG-AUTH] Path: {context.Request.Path}, HasAuthHeader: {hasAuth}, Method: {context.Request.Method}");
+    await next();
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
