@@ -10,23 +10,37 @@
     }
 }
 
+# Reusable snippet for Security Headers
+(security_headers) {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+
 # 1. Main Application (PWA)
 {$DOMAIN} {
+    import security_headers
     reverse_proxy frontend-mobile:80
 }
 
 # 2. Admin Panel (PWA)
 admin.{$DOMAIN} {
+    import security_headers
     reverse_proxy frontend-admin:80
 }
 
 # 3. Backend API
 api.{$DOMAIN} {
+    import security_headers
     reverse_proxy backend-api:8080
 }
 
 # 4. Keycloak Identity Provider
 auth.{$DOMAIN} {
+    import security_headers
     # Keycloak requires specific headers for proxying and WebSockets (admin console).
     # Caddy sets X-Forwarded-For and X-Forwarded-Proto by default.
     reverse_proxy keycloak:8080 {
