@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Flashlight, Camera, Barcode } from 'lucide-react';
 import clsx from 'clsx';
+import { compressImage } from '../utils/imageUtils';
 
 export default function ScannerView() {
   const { t } = useTranslation();
@@ -11,6 +12,8 @@ export default function ScannerView() {
   const [mode, setMode] = useState<'ean' | 'photo'>('ean');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const stopPromiseRef = useRef<Promise<void> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [photoScanMode, setPhotoScanMode] = useState<'Ingredients' | 'General'>('Ingredients');
 
   useEffect(() => {
     let html5QrCode: Html5Qrcode;
@@ -84,9 +87,23 @@ export default function ScannerView() {
     };
   }, [mode, navigate]);
 
-  const handleCapturePhoto = () => {
-    // In a real app we'd capture the frame. For this mock, we'll simulate a scan.
-    navigate(`/product/simulated_photo`);
+  const triggerFileInput = (pmode: 'Ingredients' | 'General') => {
+    setPhotoScanMode(pmode);
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressedBlob = await compressImage(file);
+        navigate('/product/photo', { state: { imageBlob: compressedBlob, scanMode: photoScanMode } });
+      } catch (error) {
+        console.error('Failed to compress image:', error);
+      }
+    }
   };
 
   return (
@@ -151,13 +168,27 @@ export default function ScannerView() {
         </div>
 
         {mode === 'photo' && (
-          <div className="flex justify-center">
+          <div className="flex flex-col space-y-4 px-6 w-full max-w-sm mx-auto">
             <button 
-              onClick={handleCapturePhoto}
-              className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center relative active:scale-90 transition-transform"
+              onClick={() => triggerFileInput('Ingredients')}
+              className="bg-[var(--color-primary)] text-white py-4 rounded-xl font-semibold shadow-lg active:scale-95 transition-transform"
             >
-              <div className="w-16 h-16 bg-white rounded-full"></div>
+              {t('scanIngredients')}
             </button>
+            <button 
+              onClick={() => triggerFileInput('General')}
+              className="bg-gray-800 text-white py-4 rounded-xl font-semibold shadow-lg border border-gray-700 active:scale-95 transition-transform"
+            >
+              {t('scanFrontPackaging')}
+            </button>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+            />
           </div>
         )}
       </div>

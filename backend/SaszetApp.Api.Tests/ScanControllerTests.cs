@@ -104,6 +104,73 @@ namespace SaszetApp.Api.Tests
 
             _mockVlmService.Verify(v => v.AnalyzeProductAsync("9999", "en"), Times.Once);
         }
+        [Fact]
+        public async Task AnalyzeImage_NoImage_ReturnsBadRequest()
+        {
+            var result = await _controller.AnalyzeImage(null, ScanMode.Ingredients);
+            Assert.IsType<BadRequestObjectResult>(result);
+        }
+
+        [Fact]
+        public async Task AnalyzeImage_OversizedImage_ReturnsBadRequest()
+        {
+            var mockFile = new Mock<IFormFile>();
+            mockFile.Setup(f => f.Length).Returns(6 * 1024 * 1024); // 6MB
+            
+            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients);
+            
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Image size exceeds the 5MB limit.", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task AnalyzeImage_InvalidMimeType_ReturnsBadRequest()
+        {
+            var mockFile = new Mock<IFormFile>();
+            mockFile.Setup(f => f.Length).Returns(1 * 1024 * 1024); // 1MB
+            mockFile.Setup(f => f.ContentType).Returns("application/pdf");
+            
+            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients);
+            
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Unsupported image format. Use JPEG, PNG, or WebP.", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task AnalyzeImage_ValidImage_CallsVlmService()
+        {
+            var mockFile = new Mock<IFormFile>();
+            var content = "fake image content"u8.ToArray();
+            mockFile.Setup(f => f.Length).Returns(content.Length);
+            mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
+            
+            var ms = new System.IO.MemoryStream(content);
+            mockFile.Setup(f => f.CopyToAsync(It.IsAny<System.IO.Stream>(), It.IsAny<System.Threading.CancellationToken>()))
+                .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
+                .Returns(Task.CompletedTask);
+
+            _controller.Request.Headers["Accept-Language"] = "pl-PL";
+
+            var expectedModel = new PetFoodItem
+            {
+                Id = Guid.NewGuid(),
+                ProductName = "Image Food",
+                Language = "pl",
+                Rating = 8
+            };
+
+            _mockVlmService
+                .Setup(v => v.AnalyzeImageAsync(It.IsAny<string>(), "image/jpeg", ScanMode.Ingredients, "pl"))
+                .ReturnsAsync(expectedModel);
+
+            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients);
+
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var model = Assert.IsType<PetFoodItem>(okResult.Value);
+            Assert.Equal("Image Food", model.ProductName);
+            
+            _mockVlmService.Verify(v => v.AnalyzeImageAsync(It.IsAny<string>(), "image/jpeg", ScanMode.Ingredients, "pl"), Times.Once);
+        }
 
 
         public void Dispose()

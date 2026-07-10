@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Share, CheckCircle2, XCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
-import { fetchAnalysisResult } from '../api/scanApi';
+import { fetchAnalysisResult, uploadImageForAnalysis } from '../api/scanApi';
 import { VLMResponseContract } from '../types';
 import LoadingOverlay from '../components/LoadingOverlay';
 import { useAppStore } from '../store/useAppStore';
@@ -11,6 +11,7 @@ export default function ResultView() {
   const { id } = useParams<{ id: string }>();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const addScan = useAppStore(state => state.addScan);
   
   const [loading, setLoading] = useState(!!id);
@@ -19,7 +20,9 @@ export default function ResultView() {
   const [ingredientsExpanded, setIngredientsExpanded] = useState(false);
 
   useEffect(() => {
-    if (!id) {
+    const state = location.state as { imageBlob?: Blob, scanMode?: 'Ingredients' | 'General' };
+    
+    if (!id && !state?.imageBlob) {
       setLoading(false);
       return;
     }
@@ -28,35 +31,58 @@ export default function ResultView() {
     setError(null);
     setLoading(true);
     
-    fetchAnalysisResult(id, i18n.language)
-      .then(res => {
-        if (!ignore) {
-          setResult(res);
-          addScan({
-            id: Date.now().toString(),
-            query: id,
-            timestamp: Date.now(),
-            result: res
-          });
-        }
-      })
-      .catch(err => {
-        if (!ignore) {
-          console.error(err);
-          const errorMsg = err?.response?.data?.message || err?.response?.statusText || err?.message || 'Wystąpił błąd podczas skanowania.';
-          setError(errorMsg);
-        }
-      })
-      .finally(() => {
-        if (!ignore) {
-          setLoading(false);
-        }
-      });
+    if (state?.imageBlob && state?.scanMode) {
+      uploadImageForAnalysis(state.imageBlob, state.scanMode, i18n.language)
+        .then(res => {
+          if (!ignore) {
+            setResult(res);
+            addScan({
+              id: Date.now().toString(),
+              query: 'photo',
+              timestamp: Date.now(),
+              result: res
+            });
+          }
+        })
+        .catch(err => {
+          if (!ignore) {
+            console.error(err);
+            const errorMsg = err?.response?.data?.message || err?.response?.statusText || err?.message || 'Wystąpił błąd podczas skanowania zdjęcia.';
+            setError(errorMsg);
+          }
+        })
+        .finally(() => {
+          if (!ignore) setLoading(false);
+        });
+    } else if (id) {
+      fetchAnalysisResult(id, i18n.language)
+        .then(res => {
+          if (!ignore) {
+            setResult(res);
+            addScan({
+              id: Date.now().toString(),
+              query: id,
+              timestamp: Date.now(),
+              result: res
+            });
+          }
+        })
+        .catch(err => {
+          if (!ignore) {
+            console.error(err);
+            const errorMsg = err?.response?.data?.message || err?.response?.statusText || err?.message || 'Wystąpił błąd podczas skanowania.';
+            setError(errorMsg);
+          }
+        })
+        .finally(() => {
+          if (!ignore) setLoading(false);
+        });
+    }
       
     return () => {
       ignore = true;
     };
-  }, [id, i18n.language, addScan]);
+  }, [id, location.state, i18n.language, addScan]);
 
   if (loading) {
     return <LoadingOverlay />;
@@ -80,7 +106,7 @@ export default function ResultView() {
     );
   }
 
-  if (!id) {
+  if (!id && !(location.state as any)?.imageBlob) {
     return (
       <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center p-6">
         <p className="text-xl text-gray-500 mb-6 text-center">{t('invalid_product_id')}</p>
