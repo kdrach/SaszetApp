@@ -14,7 +14,7 @@
 <body>
 
     <div class="saszet-card relative">
-        <#if realm.internationalizationEnabled && locale?? && locale.supported?size > 1>
+        <#if realm.internationalizationEnabled && locale?? && (locale.supported?size > 1)>
             <div class="absolute top-6 right-6 saszet-stagger-1 z-50">
                 <div class="relative group">
                     <button type="button" class="flex items-center space-x-1 text-sm font-medium text-gray-700 bg-white px-3 py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 transition-all cursor-pointer">
