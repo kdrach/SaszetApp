@@ -6,7 +6,7 @@
   "supportedLocales": ["pl", "en"],
   "defaultLocale": "pl",
   "registrationAllowed": true,
-  "verifyEmail": false,
+  "verifyEmail": true,
   "loginTheme": "saszet-theme",
   "smtpServer": {
     "host": "${env.SMTP_HOST}",
@@ -23,12 +23,10 @@
       "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
       "redirectUris": [
-        "http://localhost:3010/*",
-        "https://saszet.app/*"
+        "${env.FRONTEND_URL}/*"
       ],
       "webOrigins": [
-        "http://localhost:3010",
-        "https://saszet.app"
+        "${env.FRONTEND_URL}"
       ]
     }
   ],

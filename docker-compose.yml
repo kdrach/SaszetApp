@@ -54,6 +54,7 @@ services:
       SMTP_USER: "${SMTP_USER}"
       SMTP_PASSWORD: "${SMTP_PASSWORD}"
       SMTP_FROM: "${SMTP_FROM}"
+      FRONTEND_URL: "http://localhost:3010"
     ports:
       - "8180:8080"
     volumes:
