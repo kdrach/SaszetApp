@@ -74,6 +74,9 @@ services:
 
   # ── Frontend Mobile PWA ─────────────────────────────────────────────────────
   frontend-mobile:
+    build:
+      args:
+        VITE_MODE: production
     ports: !override []
     volumes:
       - ./frontend-mobile/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
@@ -91,6 +94,9 @@ services:
 
   # ── Frontend Admin PWA ──────────────────────────────────────────────────────
   frontend-admin:
+    build:
+      args:
+        VITE_MODE: production
     ports: !override []
     volumes:
       - ./frontend-admin/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
