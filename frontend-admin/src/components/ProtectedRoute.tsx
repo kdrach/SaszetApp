@@ -6,7 +6,11 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated, keycloak } = useAuth();
+  const { isAuthenticated, isLoading, keycloak } = useAuth();
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center min-h-screen bg-background text-gray-900">Loading authentication...</div>;
+  }
 
   if (!isAuthenticated) {
     return (
@@ -25,7 +29,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  if (keycloak.hasRealmRole && !keycloak.hasRealmRole('admin')) {
+  if (!keycloak.hasRealmRole || !keycloak.hasRealmRole('admin')) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-100">
         <div className="rounded-lg bg-white p-8 text-center shadow-xl">
