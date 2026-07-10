@@ -66,8 +66,6 @@ services:
       - Jwt__CustomerAuthority=http://keycloak:8080/realms/petfood-customer-realm
       - Jwt__ValidIssuerAdmin=https://auth.${DOMAIN:-saszet.app}/realms/petfood-admin-realm
       - Jwt__ValidIssuerCustomer=https://auth.${DOMAIN:-saszet.app}/realms/petfood-customer-realm
-      - Logging__LogLevel__Microsoft.AspNetCore.Authentication=Debug
-      - Logging__LogLevel__Microsoft.IdentityModel=Debug
     restart: always
     logging:
       driver: "json-file"
