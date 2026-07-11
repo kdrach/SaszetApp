@@ -51,10 +51,11 @@ namespace SaszetApp.Api.Controllers
             else language = "pl";
 
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
             // Cache lookup
             var cachedEntity = await _dbContext.PetFoodItems
-                .Where(p => p.UserId == userId && p.Language == language && (p.EanCode == query || p.ProductName.ToLower() == query.ToLower()))
+                .Where(p => p.Language == language && (p.EanCode == query || p.ProductName.ToLower() == query.ToLower()))
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -76,7 +77,6 @@ namespace SaszetApp.Api.Controllers
 
                 var result = await _vlmService.AnalyzeProductAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, query, language, cancellationToken);
 
-                userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 var newEntity = new PetFoodItemEntity
                 {
                     Id = Guid.NewGuid(),
@@ -111,6 +111,9 @@ namespace SaszetApp.Api.Controllers
         [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ScanRatePolicy")]
         public async Task<IActionResult> AnalyzeImage(IFormFile image, [FromForm] ScanMode mode, System.Threading.CancellationToken cancellationToken)
         {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
             if (image == null || image.Length == 0) return BadRequest("No image uploaded.");
             if (image.Length > 5 * 1024 * 1024) return BadRequest("Image size exceeds the 5MB limit.");
 
@@ -139,7 +142,6 @@ namespace SaszetApp.Api.Controllers
 
                 var result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, image.ContentType, mode, language, cancellationToken);
 
-                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 var newEntity = new PetFoodItemEntity
                 {
                     Id = Guid.NewGuid(),

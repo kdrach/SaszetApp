@@ -32,7 +32,12 @@ namespace SaszetApp.Api.Services
             _retryPolicy = Policy
                 .Handle<HttpRequestException>()
                 .OrResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode && ((int)r.StatusCode >= 500 || r.StatusCode == HttpStatusCode.TooManyRequests))
-                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                    onRetryAsync: (outcome, timespan, retryAttempt, context) =>
+                    {
+                        outcome.Result?.Dispose();
+                        return Task.CompletedTask;
+                    });
         }
 
         public async Task<VlmResponseContract> AnalyzeProductAsync(string providerName, string modelName, string apiKey, string query, string language, CancellationToken cancellationToken)
@@ -100,14 +105,15 @@ namespace SaszetApp.Api.Services
         private VlmResponseContract Sanitize(VlmResponseContract response)
         {
             if (response == null) return null;
+            var sanitizer = new Ganss.Xss.HtmlSanitizer();
             return new VlmResponseContract
             {
-                ProductName = System.Net.WebUtility.HtmlEncode(response.ProductName),
+                ProductName = response.ProductName != null ? sanitizer.Sanitize(response.ProductName) : null,
                 Rating = response.Rating,
-                Pros = response.Pros?.Select(System.Net.WebUtility.HtmlEncode).ToList(),
-                Cons = response.Cons?.Select(System.Net.WebUtility.HtmlEncode).ToList(),
-                Summary = System.Net.WebUtility.HtmlEncode(response.Summary),
-                ExtractedIngredients = System.Net.WebUtility.HtmlEncode(response.ExtractedIngredients)
+                Pros = response.Pros?.Select(p => p != null ? sanitizer.Sanitize(p) : null).ToList(),
+                Cons = response.Cons?.Select(c => c != null ? sanitizer.Sanitize(c) : null).ToList(),
+                Summary = response.Summary != null ? sanitizer.Sanitize(response.Summary) : null,
+                ExtractedIngredients = response.ExtractedIngredients != null ? sanitizer.Sanitize(response.ExtractedIngredients) : null
             };
         }
 
@@ -119,6 +125,7 @@ namespace SaszetApp.Api.Services
                 if (!res.IsSuccessStatusCode && ((int)res.StatusCode < 500 && res.StatusCode != HttpStatusCode.TooManyRequests))
                 {
                     var errorContent = await res.Content.ReadAsStringAsync(cancellationToken);
+                    res.Dispose();
                     throw new InvalidOperationException($"API error: {res.StatusCode} - {errorContent}");
                 }
                 return res;
@@ -127,6 +134,7 @@ namespace SaszetApp.Api.Services
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                response.Dispose();
                 throw new InvalidOperationException($"API error: {response.StatusCode} - {errorContent}");
             }
 

@@ -36,6 +36,13 @@ namespace SaszetApp.Api.Tests
             _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance, _mockEncryptionService.Object);
             
             var httpContext = new DefaultHttpContext();
+            var identity = new System.Security.Claims.ClaimsIdentity(new[]
+            {
+                new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "test-user-id")
+            }, "TestAuthType");
+            var user = new System.Security.Claims.ClaimsPrincipal(identity);
+            httpContext.User = user;
+
             _controller.ControllerContext = new ControllerContext
             {
                 HttpContext = httpContext
