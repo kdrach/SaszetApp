@@ -7,6 +7,8 @@ namespace SaszetApp.Api.Data
     {
         public Guid Id { get; set; } = Guid.NewGuid();
         
+        public string? UserId { get; set; }
+        
         public string? EanCode { get; set; }
         
         public string ProductName { get; set; } = string.Empty;

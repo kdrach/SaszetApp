@@ -5,51 +5,38 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using SaszetApp.Api.Data;
 using SaszetApp.Api.DTOs;
 using SaszetApp.Api.Models;
-using SaszetApp.Api.Services.Mappers;
 
 namespace SaszetApp.Api.Services
 {
     public class VlmService : IVlmService
     {
-        private readonly AppDbContext _dbContext;
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IEncryptionService _encryptionService;
-        private readonly IPetFoodModelMapper _mapper;
+        private readonly IConfiguration _configuration;
 
         public VlmService(
-            AppDbContext dbContext,
             IHttpClientFactory httpClientFactory,
-            IEncryptionService encryptionService,
-            IPetFoodModelMapper mapper)
+            IConfiguration configuration)
         {
-            _dbContext = dbContext;
             _httpClientFactory = httpClientFactory;
-            _encryptionService = encryptionService;
-            _mapper = mapper;
+            _configuration = configuration;
         }
 
-        public async Task<PetFoodItem> AnalyzeProductAsync(string query, string language)
+        public async Task<VlmResponseContract> AnalyzeProductAsync(string providerName, string modelName, string apiKey, string query, string language, CancellationToken cancellationToken)
         {
-            var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive);
-            if (providerEntity == null)
-            {
-                throw new InvalidOperationException("No active primary LLM provider configured.");
-            }
+            if (query == null) throw new ArgumentNullException(nameof(query));
 
-            var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
             var systemPrompt = $"You are a pet food analyst. The user will provide a product name or label text. " +
                                $"Analyze it and return ONLY a JSON object exactly matching this structure: " +
-                               $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
+                                $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
                                $"All text values (except productName) MUST be in the '{language}' language.";
 
-            string jsonResponse = await CallProviderAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, systemPrompt, query);
+            string jsonResponse = await CallProviderAsync(providerName, modelName, apiKey, systemPrompt, query, cancellationToken);
 
             var match = Regex.Match(jsonResponse, @"(?is)```(?:json)?\s*(.*?)\s*```");
             if (match.Success) 
@@ -62,44 +49,17 @@ namespace SaszetApp.Api.Services
             var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (vlmResponse == null) throw new InvalidOperationException("Failed to parse VLM response.");
 
-            var newEntity = new PetFoodItemEntity
-            {
-                Id = Guid.NewGuid(),
-                EanCode = null, // Or try to parse from query if it's numeric
-                ProductName = vlmResponse.ProductName,
-                Language = language,
-                Rating = vlmResponse.Rating,
-                Pros = vlmResponse.Pros,
-                Cons = vlmResponse.Cons,
-                Summary = vlmResponse.Summary,
-                ExtractedIngredients = vlmResponse.ExtractedIngredients,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            // Heuristic for EAN vs Name
-            if (query.All(char.IsDigit) && query.Length >= 8)
-            {
-                newEntity.EanCode = query;
-            }
-
-            _dbContext.PetFoodItems.Add(newEntity);
-            await _dbContext.SaveChangesAsync();
-
-            return _mapper.MapToModel(newEntity);
+            return vlmResponse;
         }
 
-        public async Task<PetFoodItem> AnalyzeImageAsync(string base64Image, string mimeType, ScanMode mode, string language)
+        public async Task<VlmResponseContract> AnalyzeImageAsync(string providerName, string modelName, string apiKey, string base64Image, string mimeType, ScanMode mode, string language, CancellationToken cancellationToken)
         {
-            var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive);
-            if (providerEntity == null) throw new InvalidOperationException("No active primary LLM provider configured.");
-
-            var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
             string systemPrompt = "";
             if (mode == ScanMode.Ingredients)
             {
                 systemPrompt = $"You are a pet food analyst. The user will provide a photo of the ingredients label. " +
                                $"Analyze the ingredients accurately. Return ONLY a JSON object exactly matching this structure: " +
-                               $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
+                                $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
                                $"If the image does not contain pet food packaging or an ingredients list, return exactly: {{\"errorCode\": \"NO_PET_FOOD_FOUND\"}}. " +
                                $"All text values (except productName) MUST be in the '{language}' language.";
             }
@@ -107,12 +67,12 @@ namespace SaszetApp.Api.Services
             {
                 systemPrompt = $"You are a pet food analyst. The user will provide a photo of the pet food package. " +
                                $"Recognize the brand and product and review its dietary properties. Return ONLY a JSON object exactly matching this structure: " +
-                               $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
+                                $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
                                $"If the image does not contain pet food packaging or an ingredients list, return exactly: {{\"errorCode\": \"NO_PET_FOOD_FOUND\"}}. " +
                                $"All text values (except productName) MUST be in the '{language}' language.";
             }
 
-            string jsonResponse = await CallProviderForImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, systemPrompt, base64Image, mimeType);
+            string jsonResponse = await CallProviderForImageAsync(providerName, modelName, apiKey, systemPrompt, base64Image, mimeType, cancellationToken);
 
             var match = Regex.Match(jsonResponse, @"(?is)```(?:json)?\s*(.*?)\s*```");
             if (match.Success) jsonResponse = match.Groups[1].Value;
@@ -126,28 +86,13 @@ namespace SaszetApp.Api.Services
             var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (vlmResponse == null) throw new InvalidOperationException("Failed to parse VLM response.");
 
-            var newEntity = new PetFoodItemEntity
-            {
-                Id = Guid.NewGuid(),
-                ProductName = vlmResponse.ProductName,
-                Language = language,
-                Rating = vlmResponse.Rating,
-                Pros = vlmResponse.Pros,
-                Cons = vlmResponse.Cons,
-                Summary = vlmResponse.Summary,
-                ExtractedIngredients = vlmResponse.ExtractedIngredients,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _dbContext.PetFoodItems.Add(newEntity);
-            await _dbContext.SaveChangesAsync();
-
-            return _mapper.MapToModel(newEntity);
+            return vlmResponse;
         }
 
-        private async Task<string> CallProviderAsync(string provider, string model, string apiKey, string systemPrompt, string userPrompt)
+        private async Task<string> CallProviderAsync(string provider, string model, string apiKey, string systemPrompt, string userPrompt, CancellationToken cancellationToken)
         {
             var client = _httpClientFactory.CreateClient();
+            var baseUrl = _configuration[$"LlmEndpoints:{provider}"];
             
             if (provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
             {
@@ -164,10 +109,11 @@ namespace SaszetApp.Api.Services
                 };
 
                 var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                var response = await client.PostAsync("https://api.openai.com/v1/chat/completions", content);
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.openai.com/v1/chat/completions" : $"{baseUrl.TrimEnd('/')}/chat/completions";
+                using var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var responseString = await response.Content.ReadAsStringAsync();
+                var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
                 return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "{}";
             }
@@ -188,10 +134,11 @@ namespace SaszetApp.Api.Services
                 };
 
                 var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                var response = await client.PostAsync("https://api.anthropic.com/v1/messages", content);
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.anthropic.com/v1/messages" : $"{baseUrl.TrimEnd('/')}/messages";
+                using var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var responseString = await response.Content.ReadAsStringAsync();
+                var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
                 return doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString() ?? "{}";
             }
@@ -211,10 +158,11 @@ namespace SaszetApp.Api.Services
                 var actualModel = model.StartsWith("models/") ? model.Substring("models/".Length) : model;
                 var encodedModel = System.Net.WebUtility.UrlEncode(actualModel);
                 
-                var response = await client.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}:generateContent", content);
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? $"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}:generateContent" : $"{baseUrl.TrimEnd('/')}/models/{encodedModel}:generateContent";
+                using var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var responseString = await response.Content.ReadAsStringAsync();
+                var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
                 return doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? "{}";
             }
@@ -222,9 +170,10 @@ namespace SaszetApp.Api.Services
             throw new NotSupportedException($"Provider {provider} is not supported.");
         }
 
-        private async Task<string> CallProviderForImageAsync(string provider, string model, string apiKey, string systemPrompt, string base64Image, string mimeType)
+        private async Task<string> CallProviderForImageAsync(string provider, string model, string apiKey, string systemPrompt, string base64Image, string mimeType, CancellationToken cancellationToken)
         {
             var client = _httpClientFactory.CreateClient();
+            var baseUrl = _configuration[$"LlmEndpoints:{provider}"];
             
             if (provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
             {
@@ -244,10 +193,11 @@ namespace SaszetApp.Api.Services
                 };
 
                 var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                var response = await client.PostAsync("https://api.openai.com/v1/chat/completions", content);
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.openai.com/v1/chat/completions" : $"{baseUrl.TrimEnd('/')}/chat/completions";
+                using var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var responseString = await response.Content.ReadAsStringAsync();
+                var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
                 return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "{}";
             }
@@ -271,10 +221,11 @@ namespace SaszetApp.Api.Services
                 };
 
                 var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                var response = await client.PostAsync("https://api.anthropic.com/v1/messages", content);
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.anthropic.com/v1/messages" : $"{baseUrl.TrimEnd('/')}/messages";
+                using var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var responseString = await response.Content.ReadAsStringAsync();
+                var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
                 return doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString() ?? "{}";
             }
@@ -297,34 +248,34 @@ namespace SaszetApp.Api.Services
                 var actualModel = model.StartsWith("models/") ? model.Substring("models/".Length) : model;
                 var encodedModel = System.Net.WebUtility.UrlEncode(actualModel);
                 
-                var response = await client.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}:generateContent", content);
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? $"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}:generateContent" : $"{baseUrl.TrimEnd('/')}/models/{encodedModel}:generateContent";
+                using var response = await client.PostAsync(url, content, cancellationToken);
                 response.EnsureSuccessStatusCode();
 
-                var responseString = await response.Content.ReadAsStringAsync();
+                var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
                 return doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? "{}";
             }
 
             throw new NotSupportedException($"Provider {provider} is not supported.");
         }
-        public async Task TestConnectionAsync(LlmProviderEntity provider, System.Threading.CancellationToken cancellationToken)
+        public async Task TestConnectionAsync(string providerName, string modelName, string apiKey, CancellationToken cancellationToken)
         {
-            var decryptedKey = _encryptionService.Decrypt(provider.EncryptedApiKey);
-            if (string.IsNullOrWhiteSpace(decryptedKey)) 
+            if (string.IsNullOrWhiteSpace(apiKey)) 
                 throw new InvalidOperationException("Invalid or missing API key.");
                 
             var client = _httpClientFactory.CreateClient();
+            var baseUrl = _configuration[$"LlmEndpoints:{providerName}"];
             
-            var modelName = provider.ModelName;
-            if (provider.ProviderName == "Gemini" && modelName.StartsWith("models/"))
+            if (providerName == "Gemini" && modelName.StartsWith("models/"))
             {
                 modelName = modelName.Substring("models/".Length);
             }
             var encodedModel = System.Net.WebUtility.UrlEncode(modelName);
 
-            if (provider.ProviderName == "Anthropic")
+            if (providerName == "Anthropic")
             {
-                client.DefaultRequestHeaders.Add("x-api-key", decryptedKey);
+                client.DefaultRequestHeaders.Add("x-api-key", apiKey);
                 client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
                 
                 var requestBody = new
@@ -334,18 +285,19 @@ namespace SaszetApp.Api.Services
                     messages = new[] { new { role = "user", content = "Test" } }
                 };
                 var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                var response = await client.PostAsync("https://api.anthropic.com/v1/messages", content, cancellationToken);
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.anthropic.com/v1/messages" : $"{baseUrl.TrimEnd('/')}/messages";
+                using var response = await client.PostAsync(url, content, cancellationToken);
                 
                 if (!response.IsSuccessStatusCode)
                 {
                     throw new InvalidOperationException("Connection test failed.");
                 }
             }
-            else if (provider.ProviderName == "Gemini")
+            else if (providerName == "Gemini")
             {
-                client.DefaultRequestHeaders.Add("x-goog-api-key", decryptedKey);
-                var url = $"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}";
-                var response = await client.GetAsync(url, cancellationToken);
+                client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? $"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}" : $"{baseUrl.TrimEnd('/')}/models/{encodedModel}";
+                using var response = await client.GetAsync(url, cancellationToken);
                 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -354,9 +306,9 @@ namespace SaszetApp.Api.Services
             }
             else
             {
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", decryptedKey);
-                var url = $"https://api.openai.com/v1/models/{encodedModel}";
-                var response = await client.GetAsync(url, cancellationToken);
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? $"https://api.openai.com/v1/models/{encodedModel}" : $"{baseUrl.TrimEnd('/')}/models/{encodedModel}";
+                using var response = await client.GetAsync(url, cancellationToken);
                 
                 if (!response.IsSuccessStatusCode)
                 {

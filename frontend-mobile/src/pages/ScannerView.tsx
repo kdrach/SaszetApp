@@ -12,72 +12,80 @@ export default function ScannerView() {
   const [mode, setMode] = useState<'ean' | 'photo'>('ean');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const stopPromiseRef = useRef<Promise<void> | null>(null);
+  const startPromiseRef = useRef<Promise<void> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoScanMode, setPhotoScanMode] = useState<'Ingredients' | 'General'>('Ingredients');
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const [torchOn, setTorchOn] = useState(false);
 
-  const isInitializingRef = useRef(false);
-
   useEffect(() => {
-    let html5QrCode: Html5Qrcode;
+    let localHtml5QrCode: Html5Qrcode;
     let isMounted = true;
     let isStarting = false;
 
     const startCamera = async () => {
-      if (isInitializingRef.current) return;
-      if (stopPromiseRef.current) {
-        await stopPromiseRef.current;
+      while (startPromiseRef.current || stopPromiseRef.current) {
+        if (startPromiseRef.current) await startPromiseRef.current;
+        if (stopPromiseRef.current) await stopPromiseRef.current;
       }
-      try {
-        isInitializingRef.current = true;
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length) {
-          if (!isMounted) return;
-          setHasPermission(true);
-          html5QrCode = new Html5Qrcode("reader");
-          html5QrCodeRef.current = html5QrCode;
-          isStarting = true;
-          
-          if (mode === 'ean') {
-            await html5QrCode.start(
-              { facingMode: "environment" },
-              { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
-              (decodedText) => {
-                if (html5QrCode.isScanning && !stopPromiseRef.current) {
-                  stopPromiseRef.current = html5QrCode.stop().then(() => {
-                    stopPromiseRef.current = null;
-                    navigate(`/product/${encodeURIComponent(decodedText)}`);
-                  }).catch((err) => {
-                    stopPromiseRef.current = null;
-                    console.error(err);
-                  });
-                }
-              },
-              () => {}
-            );
-          } else {
-            await html5QrCode.start(
-              { facingMode: "environment" },
-              { fps: 10, aspectRatio: 1.0 },
-              () => {},
-              () => {}
-            );
-          }
-          isStarting = false;
+      if (!isMounted) return;
 
-          if (!isMounted) {
-            html5QrCode.stop().catch(console.error);
-            return;
+      const p = (async () => {
+        try {
+          const devices = await Html5Qrcode.getCameras();
+          if (devices && devices.length) {
+            if (!isMounted) return;
+            setHasPermission(true);
+            localHtml5QrCode = new Html5Qrcode("reader");
+            html5QrCodeRef.current = localHtml5QrCode;
+            isStarting = true;
+            
+            if (mode === 'ean') {
+              await localHtml5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
+                (decodedText) => {
+                  if (localHtml5QrCode.isScanning && !stopPromiseRef.current) {
+                    stopPromiseRef.current = localHtml5QrCode.stop().then(() => {
+                      // Deliberately NOT setting stopPromiseRef.current = null here to prevent cleanup from double-stopping during unmount
+                      navigate(`/product/${encodeURIComponent(decodedText)}`);
+                    }).catch((err) => {
+                      stopPromiseRef.current = null;
+                      console.error(err);
+                    });
+                  }
+                },
+                () => {}
+              );
+            } else {
+              await localHtml5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, aspectRatio: 1.0 },
+                () => {},
+                () => {}
+              );
+            }
+            isStarting = false;
+
+            if (!isMounted) {
+              if (localHtml5QrCode.isScanning && !stopPromiseRef.current) {
+                stopPromiseRef.current = localHtml5QrCode.stop().then(() => { stopPromiseRef.current = null; }).catch(console.error);
+              }
+              return;
+            }
           }
+        } catch (err) {
+          isStarting = false;
+          if (!isMounted) return;
+          console.error("Camera error:", err);
+          setHasPermission(false);
         }
-      } catch (err) {
-        isStarting = false;
-        if (!isMounted) return;
-        console.error("Camera error:", err);
-        setHasPermission(false);
-      } finally {
-        isInitializingRef.current = false;
+      })();
+      
+      startPromiseRef.current = p;
+      await p;
+      if (startPromiseRef.current === p) {
+        startPromiseRef.current = null;
       }
     };
 
@@ -85,8 +93,8 @@ export default function ScannerView() {
 
     return () => {
       isMounted = false;
-      if (html5QrCodeRef.current && !isStarting && html5QrCodeRef.current.isScanning && !stopPromiseRef.current) {
-        stopPromiseRef.current = html5QrCodeRef.current.stop().then(() => {
+      if (localHtml5QrCode && !isStarting && localHtml5QrCode.isScanning && !stopPromiseRef.current) {
+        stopPromiseRef.current = localHtml5QrCode.stop().then(() => {
           stopPromiseRef.current = null;
           html5QrCodeRef.current = null;
         }).catch((err) => {

@@ -194,12 +194,13 @@ namespace SaszetApp.Api.Controllers
         [HttpPost("{id}/test")]
         public async Task<IActionResult> TestConnection(Guid id, System.Threading.CancellationToken cancellationToken)
         {
-            var provider = await _dbContext.LlmProviders.FindAsync(id);
+            var provider = await _dbContext.LlmProviders.FindAsync(new object[] { id }, cancellationToken);
             if (provider == null) return NotFound();
             
             try
             {
-                await _vlmService.TestConnectionAsync(provider, cancellationToken);
+                var decryptedKey = _encryptionService.Decrypt(provider.EncryptedApiKey);
+                await _vlmService.TestConnectionAsync(provider.ProviderName, provider.ModelName, decryptedKey, cancellationToken);
                 return Ok(new { status = "Connection tested successfully." });
             }
             catch (System.Exception)

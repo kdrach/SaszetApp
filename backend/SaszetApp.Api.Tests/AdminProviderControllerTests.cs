@@ -255,7 +255,7 @@ namespace SaszetApp.Api.Tests
             await _dbContext.SaveChangesAsync();
 
             _mockVlmService
-               .Setup(v => v.TestConnectionAsync(It.IsAny<LlmProviderEntity>(), It.IsAny<System.Threading.CancellationToken>()))
+               .Setup(v => v.TestConnectionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
                .ThrowsAsync(new InvalidOperationException("Connection test failed."));
 
             // Act
@@ -281,7 +281,7 @@ namespace SaszetApp.Api.Tests
             await _dbContext.SaveChangesAsync();
 
             _mockVlmService
-               .Setup(v => v.TestConnectionAsync(It.IsAny<LlmProviderEntity>(), It.IsAny<System.Threading.CancellationToken>()))
+               .Setup(v => v.TestConnectionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
                .Returns(Task.CompletedTask);
 
             // Act
@@ -289,7 +289,7 @@ namespace SaszetApp.Api.Tests
 
             // Assert
             Assert.IsType<OkObjectResult>(result);
-            _mockVlmService.Verify(v => v.TestConnectionAsync(It.Is<LlmProviderEntity>(p => p.Id == provider.Id), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+            _mockVlmService.Verify(v => v.TestConnectionAsync(provider.ProviderName, provider.ModelName, It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
         }
 
         [Fact]
@@ -307,7 +307,7 @@ namespace SaszetApp.Api.Tests
             await _dbContext.SaveChangesAsync();
 
             _mockVlmService
-               .Setup(v => v.TestConnectionAsync(It.IsAny<LlmProviderEntity>(), It.IsAny<System.Threading.CancellationToken>()))
+               .Setup(v => v.TestConnectionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()))
                .Returns(Task.CompletedTask);
 
             // Act
@@ -315,7 +315,7 @@ namespace SaszetApp.Api.Tests
 
             // Assert
             Assert.IsType<OkObjectResult>(result);
-            _mockVlmService.Verify(v => v.TestConnectionAsync(It.Is<LlmProviderEntity>(p => p.Id == provider.Id), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+            _mockVlmService.Verify(v => v.TestConnectionAsync(provider.ProviderName, provider.ModelName, It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
         }
 
         [Fact]
