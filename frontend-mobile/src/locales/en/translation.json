@@ -21,5 +21,6 @@
   "scanIngredients": "Scan ingredients label",
   "scanFrontPackaging": "Scan front packaging",
   "no_pet_food_found": "No pet food found in the photo. Please try again with a clearer shot.",
-  "chooseFromGallery": "Choose from gallery"
+  "chooseFromGallery": "Choose from gallery",
+  "scan_error": "Scan error"
 }
