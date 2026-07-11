@@ -123,29 +123,7 @@ export default function ScannerView() {
     }
   };
 
-  const captureFrameFromVideo = async (pmode: 'Ingredients' | 'General') => {
-    const video = document.querySelector('#reader video') as HTMLVideoElement;
-    if (!video) return;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0);
-      canvas.toBlob(async (blob) => {
-        if (blob) {
-          try {
-            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-            const compressedBlob = await compressImage(file);
-            navigate('/product/photo', { state: { imageBlob: compressedBlob, scanMode: pmode } });
-          } catch (error) {
-            console.error('Failed to compress image:', error);
-          }
-        }
-      }, 'image/jpeg', 0.95);
-    }
-  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -226,14 +204,14 @@ export default function ScannerView() {
           <div className="flex flex-col space-y-4 px-6 w-full max-w-sm mx-auto">
             <div className="flex space-x-3">
               <button 
-                onClick={() => captureFrameFromVideo('Ingredients')}
+                onClick={() => triggerFileInput('Ingredients')}
                 className="flex-1 bg-[var(--color-primary)] text-white py-4 rounded-xl font-semibold shadow-lg active:scale-95 transition-transform"
               >
                 {t('scanIngredients')}
               </button>
               <button 
                 onClick={() => triggerFileInput('Ingredients')}
-                className="bg-[var(--color-primary)]/20 text-[var(--color-primary)] p-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center"
+                className="bg-[var(--color-primary)]/20 text-[var(--color-primary)] p-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center hidden"
               >
                 <ImageIcon size={24} />
               </button>
@@ -241,14 +219,14 @@ export default function ScannerView() {
             
             <div className="flex space-x-3">
               <button 
-                onClick={() => captureFrameFromVideo('General')}
+                onClick={() => triggerFileInput('General')}
                 className="flex-1 bg-gray-800 text-white py-4 rounded-xl font-semibold shadow-lg border border-gray-700 active:scale-95 transition-transform"
               >
                 {t('scanFrontPackaging')}
               </button>
               <button 
                 onClick={() => triggerFileInput('General')}
-                className="bg-gray-800 text-white p-4 rounded-xl shadow-lg border border-gray-700 active:scale-95 transition-transform flex items-center justify-center"
+                className="bg-gray-800 text-white p-4 rounded-xl shadow-lg border border-gray-700 active:scale-95 transition-transform flex items-center justify-center hidden"
               >
                 <ImageIcon size={24} />
               </button>

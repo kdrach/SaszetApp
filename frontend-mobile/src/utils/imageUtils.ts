@@ -1,4 +1,8 @@
-export const compressImage = (file: File, maxWidth: number = 1024, maxHeight: number = 1024): Promise<Blob> => {
+export const compressImage = (
+  file: File, 
+  maxWidth: number = parseInt(import.meta.env.VITE_MAX_PHOTO_WIDTH || '1920', 10), 
+  maxHeight: number = parseInt(import.meta.env.VITE_MAX_PHOTO_HEIGHT || '1080', 10)
+): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -41,7 +45,7 @@ export const compressImage = (file: File, maxWidth: number = 1024, maxHeight: nu
             }
           },
           'image/jpeg',
-          0.8
+          0.85
         );
       };
       img.onerror = (error) => reject(error);

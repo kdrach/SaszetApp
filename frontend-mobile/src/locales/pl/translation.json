@@ -21,5 +21,6 @@
   "scanIngredients": "Skanuj etykietę ze składem",
   "scanFrontPackaging": "Skanuj front opakowania",
   "no_pet_food_found": "Nie znaleziono karmy na zdjęciu. Spróbuj jeszcze raz z wyraźniejszym kadrem.",
-  "chooseFromGallery": "Wybierz z galerii"
+  "chooseFromGallery": "Wybierz z galerii",
+  "scan_error": "Błąd skanowania"
 }
