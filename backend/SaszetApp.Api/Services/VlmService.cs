@@ -207,7 +207,11 @@ namespace SaszetApp.Api.Services
                 };
 
                 var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                var response = await client.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", content);
+                
+                var actualModel = model.StartsWith("models/") ? model.Substring("models/".Length) : model;
+                var encodedModel = System.Net.WebUtility.UrlEncode(actualModel);
+                
+                var response = await client.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}:generateContent", content);
                 response.EnsureSuccessStatusCode();
 
                 var responseString = await response.Content.ReadAsStringAsync();
@@ -289,7 +293,11 @@ namespace SaszetApp.Api.Services
                 };
 
                 var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                var response = await client.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", content);
+                
+                var actualModel = model.StartsWith("models/") ? model.Substring("models/".Length) : model;
+                var encodedModel = System.Net.WebUtility.UrlEncode(actualModel);
+                
+                var response = await client.PostAsync($"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}:generateContent", content);
                 response.EnsureSuccessStatusCode();
 
                 var responseString = await response.Content.ReadAsStringAsync();

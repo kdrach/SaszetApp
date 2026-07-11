@@ -17,16 +17,20 @@ export default function ScannerView() {
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const [torchOn, setTorchOn] = useState(false);
 
+  const isInitializingRef = useRef(false);
+
   useEffect(() => {
     let html5QrCode: Html5Qrcode;
     let isMounted = true;
     let isStarting = false;
 
     const startCamera = async () => {
+      if (isInitializingRef.current) return;
       if (stopPromiseRef.current) {
         await stopPromiseRef.current;
       }
       try {
+        isInitializingRef.current = true;
         const devices = await Html5Qrcode.getCameras();
         if (devices && devices.length) {
           if (!isMounted) return;
@@ -72,6 +76,8 @@ export default function ScannerView() {
         if (!isMounted) return;
         console.error("Camera error:", err);
         setHasPermission(false);
+      } finally {
+        isInitializingRef.current = false;
       }
     };
 
@@ -158,7 +164,7 @@ export default function ScannerView() {
 
       <div className="flex-1 relative overflow-hidden">
         {hasPermission === false && (
-          <div className="absolute inset-0 flex items-center justify-center text-white text-center px-6">
+          <div className="absolute inset-0 flex items-center justify-center text-white text-center px-6 z-20 bg-black">
             <p className="bg-red-500/80 px-4 py-3 rounded-xl">{t('cameraPermission')}</p>
           </div>
         )}
@@ -176,11 +182,13 @@ export default function ScannerView() {
           </div>
         )}
 
-        <div className="absolute top-1/4 left-0 w-full text-center pointer-events-none mt-20">
-          <span className="bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-medium tracking-wide shadow-lg">
-            {mode === 'ean' ? t('placeBarcode') : t('takePhoto')}
-          </span>
-        </div>
+        {hasPermission !== false && (
+          <div className="absolute top-1/4 left-0 w-full text-center pointer-events-none mt-20 z-20">
+            <span className="bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-medium tracking-wide shadow-lg">
+              {mode === 'ean' ? t('placeBarcode') : t('takePhoto')}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="bg-black/80 backdrop-blur-xl rounded-t-[2.5rem] p-8 pb-12 shadow-[0_-10px_40px_rgba(0,0,0,0.3)]">
