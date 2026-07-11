@@ -148,6 +148,45 @@ namespace SaszetApp.Api.Tests
         }
 
         [Fact]
+        public async Task UpdateProvider_UpdatesExistingProvider()
+        {
+            // Arrange
+            var existing = new LlmProviderEntity
+            {
+                Id = Guid.NewGuid(),
+                ProviderName = "OpenAI",
+                ModelName = "old_model",
+                EncryptedApiKey = "enc_old_key",
+                IsPrimary = false,
+                IsActive = true
+            };
+            _dbContext.LlmProviders.Add(existing);
+            await _dbContext.SaveChangesAsync();
+
+            var dto = new AdminProviderController.CreateProviderDto
+            {
+                ProviderName = "OpenAI",
+                ModelName = "new_model",
+                ApiKey = "new_key",
+                IsPrimary = true,
+                IsActive = false
+            };
+
+            // Act
+            var result = await _controller.UpdateProvider(existing.Id, dto);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            _dbContext.ChangeTracker.Clear();
+            var updated = await _dbContext.LlmProviders.FindAsync(existing.Id);
+            Assert.NotNull(updated);
+            Assert.Equal("new_model", updated.ModelName);
+            Assert.Equal("enc_new_key", updated.EncryptedApiKey);
+            Assert.True(updated.IsPrimary);
+            Assert.False(updated.IsActive);
+        }
+
+        [Fact]
         public async Task CreateProvider_KeepsExistingApiKey()
         {
             // Arrange
@@ -244,6 +283,7 @@ namespace SaszetApp.Api.Tests
             {
                 Id = Guid.NewGuid(),
                 ProviderName = "Gemini",
+                ModelName = "test-model",
                 EncryptedApiKey = "enc_secret"
             };
             _dbContext.LlmProviders.Add(provider);
@@ -270,7 +310,8 @@ namespace SaszetApp.Api.Tests
             // Assert
             Assert.IsType<OkObjectResult>(result);
             Assert.NotNull(capturedRequest);
-            Assert.Equal("https://generativelanguage.googleapis.com/v1beta/models", capturedRequest.RequestUri.ToString());
+            Assert.Equal("https://generativelanguage.googleapis.com/v1beta/models/test-model", capturedRequest.RequestUri.ToString());
+            Assert.Equal(System.Net.Http.HttpMethod.Get, capturedRequest.Method);
             Assert.True(capturedRequest.Headers.Contains("x-goog-api-key"));
             Assert.Equal("secret", capturedRequest.Headers.GetValues("x-goog-api-key").First());
         }
@@ -283,6 +324,7 @@ namespace SaszetApp.Api.Tests
             {
                 Id = Guid.NewGuid(),
                 ProviderName = "Anthropic",
+                ModelName = "test-model",
                 EncryptedApiKey = "enc_secret"
             };
             _dbContext.LlmProviders.Add(provider);
@@ -309,7 +351,8 @@ namespace SaszetApp.Api.Tests
             // Assert
             Assert.IsType<OkObjectResult>(result);
             Assert.NotNull(capturedRequest);
-            Assert.Equal("https://api.anthropic.com/v1/models", capturedRequest.RequestUri.ToString());
+            Assert.Equal("https://api.anthropic.com/v1/messages", capturedRequest.RequestUri.ToString());
+            Assert.Equal(System.Net.Http.HttpMethod.Post, capturedRequest.Method);
             Assert.True(capturedRequest.Headers.Contains("x-api-key"));
             Assert.Equal("secret", capturedRequest.Headers.GetValues("x-api-key").First());
             Assert.True(capturedRequest.Headers.Contains("anthropic-version"));

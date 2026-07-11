@@ -20,12 +20,14 @@ namespace SaszetApp.Api.Controllers
         private readonly AppDbContext _dbContext;
         private readonly IVlmService _vlmService;
         private readonly IPetFoodModelMapper _mapper;
+        private readonly ILogger<ScanController> _logger;
 
-        public ScanController(AppDbContext dbContext, IVlmService vlmService, IPetFoodModelMapper mapper)
+        public ScanController(AppDbContext dbContext, IVlmService vlmService, IPetFoodModelMapper mapper, ILogger<ScanController> logger)
         {
             _dbContext = dbContext;
             _vlmService = vlmService;
             _mapper = mapper;
+            _logger = logger;
         }
 
         [HttpGet("search")]
@@ -63,8 +65,9 @@ namespace SaszetApp.Api.Controllers
                 var result = await _vlmService.AnalyzeProductAsync(query, language);
                 return Ok(result);
             }
-            catch (System.Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "Error analyzing product.");
                 return StatusCode(500, new { message = "Error analyzing product." });
             }
         }
@@ -96,9 +99,15 @@ namespace SaszetApp.Api.Controllers
             {
                 return StatusCode(422, new { errorCode = "NO_PET_FOOD_FOUND" });
             }
-            catch (Exception)
+            catch (InvalidOperationException ex) when (ex.Message == "No active primary LLM provider configured.")
             {
-                return StatusCode(500, new { message = "Error analyzing image." });
+                _logger.LogWarning("LLM Provider is missing.");
+                return StatusCode(503, new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error analyzing image.");
+                return StatusCode(500, new { message = "Error analyzing image.", details = ex.Message });
             }
         }
     }

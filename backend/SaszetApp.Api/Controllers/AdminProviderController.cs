@@ -113,6 +113,47 @@ namespace SaszetApp.Api.Controllers
             }
         }
 
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateProvider(Guid id, [FromBody] CreateProviderDto dto)
+        {
+            using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            try
+            {
+                var entity = await _dbContext.LlmProviders.FindAsync(id);
+                if (entity == null) return NotFound();
+
+                if (dto.IsPrimary && !entity.IsPrimary)
+                {
+                    var currentPrimary = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary);
+                    if (currentPrimary != null)
+                    {
+                        currentPrimary.IsPrimary = false;
+                    }
+                }
+
+                entity.ProviderName = dto.ProviderName;
+                entity.ModelName = dto.ModelName;
+                if (dto.ApiKey != "KEEP_EXISTING")
+                {
+                    entity.EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey);
+                }
+                entity.IsPrimary = dto.IsPrimary;
+                entity.IsActive = dto.IsActive;
+
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var model = _mapper.MapToModel(entity);
+                model.EncryptedApiKey = "********";
+                return Ok(model);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
         [HttpPut("{id}/set-primary")]
         public async Task<IActionResult> SetPrimary(Guid id)
         {
@@ -155,30 +196,51 @@ namespace SaszetApp.Api.Controllers
             {
                 using var client = _httpClientFactory.CreateClient();
                 
-                string url = provider.ProviderName switch
-                {
-                    "Anthropic" => "https://api.anthropic.com/v1/models",
-                    "Gemini" => "https://generativelanguage.googleapis.com/v1beta/models",
-                    _ => "https://api.openai.com/v1/models"
-                };
-
                 if (provider.ProviderName == "Anthropic")
                 {
                     client.DefaultRequestHeaders.Add("x-api-key", decryptedKey);
                     client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+                    
+                    var requestBody = new
+                    {
+                        model = provider.ModelName,
+                        max_tokens = 1,
+                        messages = new[] { new { role = "user", content = "Test" } }
+                    };
+                    var content = new System.Net.Http.StringContent(System.Text.Json.JsonSerializer.Serialize(requestBody), System.Text.Encoding.UTF8, "application/json");
+                    var response = await client.PostAsync("https://api.anthropic.com/v1/messages", content);
+                    
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var error = await response.Content.ReadAsStringAsync();
+                        return BadRequest(new { message = "Connection test failed.", details = error });
+                    }
                 }
                 else if (provider.ProviderName == "Gemini")
                 {
                     client.DefaultRequestHeaders.Add("x-goog-api-key", decryptedKey);
+                    var url = $"https://generativelanguage.googleapis.com/v1beta/models/{provider.ModelName}";
+                    var response = await client.GetAsync(url);
+                    
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var error = await response.Content.ReadAsStringAsync();
+                        return BadRequest(new { message = "Connection test failed.", details = error });
+                    }
                 }
                 else
                 {
                     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", decryptedKey);
+                    var url = $"https://api.openai.com/v1/models/{provider.ModelName}";
+                    var response = await client.GetAsync(url);
+                    
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var error = await response.Content.ReadAsStringAsync();
+                        return BadRequest(new { message = "Connection test failed.", details = error });
+                    }
                 }
                 
-                // Minimal validation/ping
-                var response = await client.GetAsync(url);
-                response.EnsureSuccessStatusCode();
                 return Ok(new { status = "Connection tested successfully." });
             }
             catch (System.Exception ex)
