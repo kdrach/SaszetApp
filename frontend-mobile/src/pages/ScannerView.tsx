@@ -47,11 +47,11 @@ export default function ScannerView() {
                 (decodedText) => {
                   if (localHtml5QrCode.isScanning && !stopPromiseRef.current) {
                     stopPromiseRef.current = localHtml5QrCode.stop().then(() => {
-                      // Deliberately NOT setting stopPromiseRef.current = null here to prevent cleanup from double-stopping during unmount
                       navigate(`/product/${encodeURIComponent(decodedText)}`);
                     }).catch((err) => {
-                      stopPromiseRef.current = null;
                       console.error(err);
+                    }).finally(() => {
+                      stopPromiseRef.current = null;
                     });
                   }
                 },
@@ -69,7 +69,7 @@ export default function ScannerView() {
 
             if (!isMounted) {
               if (localHtml5QrCode.isScanning && !stopPromiseRef.current) {
-                stopPromiseRef.current = localHtml5QrCode.stop().then(() => { stopPromiseRef.current = null; }).catch(console.error);
+                stopPromiseRef.current = localHtml5QrCode.stop().catch(console.error).finally(() => { stopPromiseRef.current = null; });
               }
               return;
             }
@@ -95,11 +95,11 @@ export default function ScannerView() {
       isMounted = false;
       if (localHtml5QrCode && !isStarting && localHtml5QrCode.isScanning && !stopPromiseRef.current) {
         stopPromiseRef.current = localHtml5QrCode.stop().then(() => {
-          stopPromiseRef.current = null;
           html5QrCodeRef.current = null;
         }).catch((err) => {
-          stopPromiseRef.current = null;
           console.error(err);
+        }).finally(() => {
+          stopPromiseRef.current = null;
         });
       }
     };

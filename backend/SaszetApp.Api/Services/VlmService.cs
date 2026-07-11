@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -8,6 +9,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Polly;
+using Polly.Retry;
 using SaszetApp.Api.Data;
 using SaszetApp.Api.DTOs;
 using SaszetApp.Api.Models;
@@ -18,6 +21,7 @@ namespace SaszetApp.Api.Services
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
+        private readonly AsyncRetryPolicy<HttpResponseMessage> _retryPolicy;
 
         public VlmService(
             IHttpClientFactory httpClientFactory,
@@ -25,6 +29,10 @@ namespace SaszetApp.Api.Services
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
+            _retryPolicy = Policy
+                .Handle<HttpRequestException>()
+                .OrResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode && ((int)r.StatusCode >= 500 || r.StatusCode == HttpStatusCode.TooManyRequests))
+                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
         }
 
         public async Task<VlmResponseContract> AnalyzeProductAsync(string providerName, string modelName, string apiKey, string query, string language, CancellationToken cancellationToken)
@@ -49,7 +57,7 @@ namespace SaszetApp.Api.Services
             var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (vlmResponse == null) throw new InvalidOperationException("Failed to parse VLM response.");
 
-            return vlmResponse;
+            return Sanitize(vlmResponse);
         }
 
         public async Task<VlmResponseContract> AnalyzeImageAsync(string providerName, string modelName, string apiKey, string base64Image, string mimeType, ScanMode mode, string language, CancellationToken cancellationToken)
@@ -86,7 +94,43 @@ namespace SaszetApp.Api.Services
             var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (vlmResponse == null) throw new InvalidOperationException("Failed to parse VLM response.");
 
-            return vlmResponse;
+            return Sanitize(vlmResponse);
+        }
+
+        private VlmResponseContract Sanitize(VlmResponseContract response)
+        {
+            if (response == null) return null;
+            return new VlmResponseContract
+            {
+                ProductName = System.Net.WebUtility.HtmlEncode(response.ProductName),
+                Rating = response.Rating,
+                Pros = response.Pros?.Select(System.Net.WebUtility.HtmlEncode).ToList(),
+                Cons = response.Cons?.Select(System.Net.WebUtility.HtmlEncode).ToList(),
+                Summary = System.Net.WebUtility.HtmlEncode(response.Summary),
+                ExtractedIngredients = System.Net.WebUtility.HtmlEncode(response.ExtractedIngredients)
+            };
+        }
+
+        private async Task<HttpResponseMessage> ExecuteWithRetryAsync(Func<Task<HttpResponseMessage>> action, CancellationToken cancellationToken)
+        {
+            var response = await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var res = await action();
+                if (!res.IsSuccessStatusCode && ((int)res.StatusCode < 500 && res.StatusCode != HttpStatusCode.TooManyRequests))
+                {
+                    var errorContent = await res.Content.ReadAsStringAsync(cancellationToken);
+                    throw new InvalidOperationException($"API error: {res.StatusCode} - {errorContent}");
+                }
+                return res;
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                throw new InvalidOperationException($"API error: {response.StatusCode} - {errorContent}");
+            }
+
+            return response;
         }
 
         private async Task<string> CallProviderAsync(string provider, string model, string apiKey, string systemPrompt, string userPrompt, CancellationToken cancellationToken)
@@ -108,10 +152,8 @@ namespace SaszetApp.Api.Services
                     response_format = new { type = "json_object" }
                 };
 
-                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
                 var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.openai.com/v1/chat/completions" : $"{baseUrl.TrimEnd('/')}/chat/completions";
-                using var response = await client.PostAsync(url, content, cancellationToken);
-                response.EnsureSuccessStatusCode();
+                using var response = await ExecuteWithRetryAsync(() => client.PostAsync(url, new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
 
                 var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
@@ -133,10 +175,8 @@ namespace SaszetApp.Api.Services
                     }
                 };
 
-                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
                 var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.anthropic.com/v1/messages" : $"{baseUrl.TrimEnd('/')}/messages";
-                using var response = await client.PostAsync(url, content, cancellationToken);
-                response.EnsureSuccessStatusCode();
+                using var response = await ExecuteWithRetryAsync(() => client.PostAsync(url, new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
 
                 var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
@@ -153,14 +193,11 @@ namespace SaszetApp.Api.Services
                     generationConfig = new { responseMimeType = "application/json" }
                 };
 
-                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-                
                 var actualModel = model.StartsWith("models/") ? model.Substring("models/".Length) : model;
                 var encodedModel = System.Net.WebUtility.UrlEncode(actualModel);
                 
                 var url = string.IsNullOrWhiteSpace(baseUrl) ? $"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}:generateContent" : $"{baseUrl.TrimEnd('/')}/models/{encodedModel}:generateContent";
-                using var response = await client.PostAsync(url, content, cancellationToken);
-                response.EnsureSuccessStatusCode();
+                using var response = await ExecuteWithRetryAsync(() => client.PostAsync(url, new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
 
                 var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
@@ -192,10 +229,8 @@ namespace SaszetApp.Api.Services
                     response_format = new { type = "json_object" }
                 };
 
-                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
                 var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.openai.com/v1/chat/completions" : $"{baseUrl.TrimEnd('/')}/chat/completions";
-                using var response = await client.PostAsync(url, content, cancellationToken);
-                response.EnsureSuccessStatusCode();
+                using var response = await ExecuteWithRetryAsync(() => client.PostAsync(url, new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
 
                 var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
@@ -220,10 +255,8 @@ namespace SaszetApp.Api.Services
                     }
                 };
 
-                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
                 var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.anthropic.com/v1/messages" : $"{baseUrl.TrimEnd('/')}/messages";
-                using var response = await client.PostAsync(url, content, cancellationToken);
-                response.EnsureSuccessStatusCode();
+                using var response = await ExecuteWithRetryAsync(() => client.PostAsync(url, new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
 
                 var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
@@ -242,15 +275,12 @@ namespace SaszetApp.Api.Services
                     } } },
                     generationConfig = new { responseMimeType = "application/json" }
                 };
-
-                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
                 
                 var actualModel = model.StartsWith("models/") ? model.Substring("models/".Length) : model;
                 var encodedModel = System.Net.WebUtility.UrlEncode(actualModel);
                 
                 var url = string.IsNullOrWhiteSpace(baseUrl) ? $"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}:generateContent" : $"{baseUrl.TrimEnd('/')}/models/{encodedModel}:generateContent";
-                using var response = await client.PostAsync(url, content, cancellationToken);
-                response.EnsureSuccessStatusCode();
+                using var response = await ExecuteWithRetryAsync(() => client.PostAsync(url, new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
 
                 var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(responseString);
@@ -284,36 +314,20 @@ namespace SaszetApp.Api.Services
                     max_tokens = 1,
                     messages = new[] { new { role = "user", content = "Test" } }
                 };
-                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
                 var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.anthropic.com/v1/messages" : $"{baseUrl.TrimEnd('/')}/messages";
-                using var response = await client.PostAsync(url, content, cancellationToken);
-                
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new InvalidOperationException("Connection test failed.");
-                }
+                using var response = await ExecuteWithRetryAsync(() => client.PostAsync(url, new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
             }
             else if (providerName == "Gemini")
             {
                 client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
                 var url = string.IsNullOrWhiteSpace(baseUrl) ? $"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}" : $"{baseUrl.TrimEnd('/')}/models/{encodedModel}";
-                using var response = await client.GetAsync(url, cancellationToken);
-                
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new InvalidOperationException("Connection test failed.");
-                }
+                using var response = await ExecuteWithRetryAsync(() => client.GetAsync(url, cancellationToken), cancellationToken);
             }
             else
             {
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
                 var url = string.IsNullOrWhiteSpace(baseUrl) ? $"https://api.openai.com/v1/models/{encodedModel}" : $"{baseUrl.TrimEnd('/')}/models/{encodedModel}";
-                using var response = await client.GetAsync(url, cancellationToken);
-                
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new InvalidOperationException("Connection test failed.");
-                }
+                using var response = await ExecuteWithRetryAsync(() => client.GetAsync(url, cancellationToken), cancellationToken);
             }
         }
     }

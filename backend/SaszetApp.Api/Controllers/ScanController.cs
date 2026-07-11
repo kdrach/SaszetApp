@@ -50,9 +50,11 @@ namespace SaszetApp.Api.Controllers
             else if (language.StartsWith("en")) language = "en";
             else language = "pl";
 
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
             // Cache lookup
             var cachedEntity = await _dbContext.PetFoodItems
-                .Where(p => p.Language == language && (p.EanCode == query || p.ProductName.ToLower() == query.ToLower()))
+                .Where(p => p.UserId == userId && p.Language == language && (p.EanCode == query || p.ProductName.ToLower() == query.ToLower()))
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -74,7 +76,7 @@ namespace SaszetApp.Api.Controllers
 
                 var result = await _vlmService.AnalyzeProductAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, query, language, cancellationToken);
 
-                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 var newEntity = new PetFoodItemEntity
                 {
                     Id = Guid.NewGuid(),
