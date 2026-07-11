@@ -107,7 +107,7 @@ namespace SaszetApp.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error analyzing image.");
-                return StatusCode(500, new { message = "Error analyzing image.", details = ex.Message });
+                return StatusCode(500, new { message = "Error analyzing image." });
             }
         }
     }

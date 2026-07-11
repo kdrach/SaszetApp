@@ -20,14 +20,14 @@ namespace SaszetApp.Api.Controllers
         private readonly AppDbContext _dbContext;
         private readonly ILlmProviderModelMapper _mapper;
         private readonly IEncryptionService _encryptionService;
-        private readonly System.Net.Http.IHttpClientFactory _httpClientFactory;
+        private readonly IVlmService _vlmService;
 
-        public AdminProviderController(AppDbContext dbContext, ILlmProviderModelMapper mapper, IEncryptionService encryptionService, System.Net.Http.IHttpClientFactory httpClientFactory)
+        public AdminProviderController(AppDbContext dbContext, ILlmProviderModelMapper mapper, IEncryptionService encryptionService, IVlmService vlmService)
         {
             _dbContext = dbContext;
             _mapper = mapper;
             _encryptionService = encryptionService;
-            _httpClientFactory = httpClientFactory;
+            _vlmService = vlmService;
         }
 
         [HttpGet]
@@ -116,11 +116,20 @@ namespace SaszetApp.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateProvider(Guid id, [FromBody] CreateProviderDto dto)
         {
-            using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             try
             {
                 var entity = await _dbContext.LlmProviders.FindAsync(id);
                 if (entity == null) return NotFound();
+
+                if (!dto.IsPrimary && entity.IsPrimary)
+                {
+                    var primaryCount = await _dbContext.LlmProviders.CountAsync(p => p.IsPrimary);
+                    if (primaryCount <= 1)
+                    {
+                        return BadRequest("Cannot unset the last primary provider.");
+                    }
+                }
 
                 if (dto.IsPrimary && !entity.IsPrimary)
                 {
@@ -157,7 +166,7 @@ namespace SaszetApp.Api.Controllers
         [HttpPut("{id}/set-primary")]
         public async Task<IActionResult> SetPrimary(Guid id)
         {
-            using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             try
             {
                 var provider = await _dbContext.LlmProviders.FindAsync(id);
@@ -183,69 +192,19 @@ namespace SaszetApp.Api.Controllers
         }
 
         [HttpPost("{id}/test")]
-        public async Task<IActionResult> TestConnection(Guid id)
+        public async Task<IActionResult> TestConnection(Guid id, System.Threading.CancellationToken cancellationToken)
         {
             var provider = await _dbContext.LlmProviders.FindAsync(id);
             if (provider == null) return NotFound();
             
-            var decryptedKey = _encryptionService.Decrypt(provider.EncryptedApiKey);
-            if (string.IsNullOrWhiteSpace(decryptedKey)) 
-                return BadRequest("Invalid or missing API key.");
-                
             try
             {
-                using var client = _httpClientFactory.CreateClient();
-                
-                if (provider.ProviderName == "Anthropic")
-                {
-                    client.DefaultRequestHeaders.Add("x-api-key", decryptedKey);
-                    client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
-                    
-                    var requestBody = new
-                    {
-                        model = provider.ModelName,
-                        max_tokens = 1,
-                        messages = new[] { new { role = "user", content = "Test" } }
-                    };
-                    var content = new System.Net.Http.StringContent(System.Text.Json.JsonSerializer.Serialize(requestBody), System.Text.Encoding.UTF8, "application/json");
-                    var response = await client.PostAsync("https://api.anthropic.com/v1/messages", content);
-                    
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        var error = await response.Content.ReadAsStringAsync();
-                        return BadRequest(new { message = "Connection test failed.", details = error });
-                    }
-                }
-                else if (provider.ProviderName == "Gemini")
-                {
-                    client.DefaultRequestHeaders.Add("x-goog-api-key", decryptedKey);
-                    var url = $"https://generativelanguage.googleapis.com/v1beta/models/{provider.ModelName}";
-                    var response = await client.GetAsync(url);
-                    
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        var error = await response.Content.ReadAsStringAsync();
-                        return BadRequest(new { message = "Connection test failed.", details = error });
-                    }
-                }
-                else
-                {
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", decryptedKey);
-                    var url = $"https://api.openai.com/v1/models/{provider.ModelName}";
-                    var response = await client.GetAsync(url);
-                    
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        var error = await response.Content.ReadAsStringAsync();
-                        return BadRequest(new { message = "Connection test failed.", details = error });
-                    }
-                }
-                
+                await _vlmService.TestConnectionAsync(provider, cancellationToken);
                 return Ok(new { status = "Connection tested successfully." });
             }
-            catch (System.Exception ex)
+            catch (System.Exception)
             {
-                return BadRequest(new { message = "Connection test failed.", details = ex.Message });
+                return BadRequest(new { message = "Connection test failed." });
             }
         }
     }

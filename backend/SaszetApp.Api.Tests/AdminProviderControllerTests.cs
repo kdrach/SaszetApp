@@ -22,7 +22,7 @@ namespace SaszetApp.Api.Tests
         private readonly AppDbContext _dbContext;
         private readonly ILlmProviderModelMapper _mapper;
         private readonly Mock<IEncryptionService> _mockEncryption;
-        private readonly Mock<System.Net.Http.IHttpClientFactory> _mockHttpClientFactory;
+        private readonly Mock<IVlmService> _mockVlmService;
         private readonly AdminProviderController _controller;
 
         public AdminProviderControllerTests()
@@ -39,12 +39,12 @@ namespace SaszetApp.Api.Tests
             
             _mapper = new LlmProviderModelMapper();
             _mockEncryption = new Mock<IEncryptionService>();
-            _mockHttpClientFactory = new Mock<System.Net.Http.IHttpClientFactory>();
+            _mockVlmService = new Mock<IVlmService>();
             
             _mockEncryption.Setup(e => e.Encrypt(It.IsAny<string>())).Returns((string s) => "enc_" + s);
             _mockEncryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns((string s) => s.Replace("enc_", ""));
 
-            _controller = new AdminProviderController(_dbContext, _mapper, _mockEncryption.Object, _mockHttpClientFactory.Object);
+            _controller = new AdminProviderController(_dbContext, _mapper, _mockEncryption.Object, _mockVlmService.Object);
         }
 
         [Fact]
@@ -254,21 +254,12 @@ namespace SaszetApp.Api.Tests
             _dbContext.LlmProviders.Add(provider);
             await _dbContext.SaveChangesAsync();
 
-            var mockHandler = new Mock<System.Net.Http.HttpMessageHandler>();
-            mockHandler
-               .Protected()
-               .Setup<Task<System.Net.Http.HttpResponseMessage>>(
-                  "SendAsync",
-                  ItExpr.IsAny<System.Net.Http.HttpRequestMessage>(),
-                  ItExpr.IsAny<System.Threading.CancellationToken>()
-               )
-               .ThrowsAsync(new System.Net.Http.HttpRequestException("Network error"));
-
-            var client = new System.Net.Http.HttpClient(mockHandler.Object);
-            _mockHttpClientFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(client);
+            _mockVlmService
+               .Setup(v => v.TestConnectionAsync(It.IsAny<LlmProviderEntity>(), It.IsAny<System.Threading.CancellationToken>()))
+               .ThrowsAsync(new InvalidOperationException("Connection test failed."));
 
             // Act
-            var result = await _controller.TestConnection(provider.Id);
+            var result = await _controller.TestConnection(provider.Id, default);
 
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
@@ -276,7 +267,7 @@ namespace SaszetApp.Api.Tests
         }
 
         [Fact]
-        public async Task TestConnection_Gemini_SetsHeaderCorrectly()
+        public async Task TestConnection_Gemini_CallsServiceCorrectly()
         {
             // Arrange
             var provider = new LlmProviderEntity
@@ -289,35 +280,20 @@ namespace SaszetApp.Api.Tests
             _dbContext.LlmProviders.Add(provider);
             await _dbContext.SaveChangesAsync();
 
-            System.Net.Http.HttpRequestMessage capturedRequest = null;
-            var mockHandler = new Mock<System.Net.Http.HttpMessageHandler>();
-            mockHandler
-               .Protected()
-               .Setup<Task<System.Net.Http.HttpResponseMessage>>(
-                  "SendAsync",
-                  ItExpr.IsAny<System.Net.Http.HttpRequestMessage>(),
-                  ItExpr.IsAny<System.Threading.CancellationToken>()
-               )
-               .Callback<System.Net.Http.HttpRequestMessage, System.Threading.CancellationToken>((r, c) => capturedRequest = r)
-               .ReturnsAsync(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK));
-
-            var client = new System.Net.Http.HttpClient(mockHandler.Object);
-            _mockHttpClientFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(client);
+            _mockVlmService
+               .Setup(v => v.TestConnectionAsync(It.IsAny<LlmProviderEntity>(), It.IsAny<System.Threading.CancellationToken>()))
+               .Returns(Task.CompletedTask);
 
             // Act
-            var result = await _controller.TestConnection(provider.Id);
+            var result = await _controller.TestConnection(provider.Id, default);
 
             // Assert
             Assert.IsType<OkObjectResult>(result);
-            Assert.NotNull(capturedRequest);
-            Assert.Equal("https://generativelanguage.googleapis.com/v1beta/models/test-model", capturedRequest.RequestUri.ToString());
-            Assert.Equal(System.Net.Http.HttpMethod.Get, capturedRequest.Method);
-            Assert.True(capturedRequest.Headers.Contains("x-goog-api-key"));
-            Assert.Equal("secret", capturedRequest.Headers.GetValues("x-goog-api-key").First());
+            _mockVlmService.Verify(v => v.TestConnectionAsync(It.Is<LlmProviderEntity>(p => p.Id == provider.Id), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
         }
 
         [Fact]
-        public async Task TestConnection_Anthropic_SetsHeadersCorrectly()
+        public async Task TestConnection_Anthropic_CallsServiceCorrectly()
         {
             // Arrange
             var provider = new LlmProviderEntity
@@ -330,33 +306,16 @@ namespace SaszetApp.Api.Tests
             _dbContext.LlmProviders.Add(provider);
             await _dbContext.SaveChangesAsync();
 
-            System.Net.Http.HttpRequestMessage capturedRequest = null;
-            var mockHandler = new Mock<System.Net.Http.HttpMessageHandler>();
-            mockHandler
-               .Protected()
-               .Setup<Task<System.Net.Http.HttpResponseMessage>>(
-                  "SendAsync",
-                  ItExpr.IsAny<System.Net.Http.HttpRequestMessage>(),
-                  ItExpr.IsAny<System.Threading.CancellationToken>()
-               )
-               .Callback<System.Net.Http.HttpRequestMessage, System.Threading.CancellationToken>((r, c) => capturedRequest = r)
-               .ReturnsAsync(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK));
-
-            var client = new System.Net.Http.HttpClient(mockHandler.Object);
-            _mockHttpClientFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(client);
+            _mockVlmService
+               .Setup(v => v.TestConnectionAsync(It.IsAny<LlmProviderEntity>(), It.IsAny<System.Threading.CancellationToken>()))
+               .Returns(Task.CompletedTask);
 
             // Act
-            var result = await _controller.TestConnection(provider.Id);
+            var result = await _controller.TestConnection(provider.Id, default);
 
             // Assert
             Assert.IsType<OkObjectResult>(result);
-            Assert.NotNull(capturedRequest);
-            Assert.Equal("https://api.anthropic.com/v1/messages", capturedRequest.RequestUri.ToString());
-            Assert.Equal(System.Net.Http.HttpMethod.Post, capturedRequest.Method);
-            Assert.True(capturedRequest.Headers.Contains("x-api-key"));
-            Assert.Equal("secret", capturedRequest.Headers.GetValues("x-api-key").First());
-            Assert.True(capturedRequest.Headers.Contains("anthropic-version"));
-            Assert.Equal("2023-06-01", capturedRequest.Headers.GetValues("anthropic-version").First());
+            _mockVlmService.Verify(v => v.TestConnectionAsync(It.Is<LlmProviderEntity>(p => p.Id == provider.Id), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
         }
 
         [Fact]
