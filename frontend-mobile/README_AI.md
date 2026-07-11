@@ -23,3 +23,6 @@
   - Added HTML5 `<canvas>`-based image compression (`imageUtils.ts`) to reduce upload payloads.
   - Implemented Photo Mode UI in `ScannerView` allowing file capture for Ingredients or General scanning.
   - Updated `ResultView` and `scanApi.ts` to support multipart `FormData` uploads to the backend.
+
+- **Bug Fixes (Camera)**:
+  - Fixed concurrent camera initialization race conditions caused by React StrictMode and prevented double UI error overlays on denied permissions in ScannerView.
