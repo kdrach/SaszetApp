@@ -30,7 +30,7 @@ namespace SaszetApp.Api.Tests
             _mockVlmService = new Mock<IVlmService>();
             _mapper = new PetFoodModelMapper();
 
-            _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper);
+            _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance);
             
             var httpContext = new DefaultHttpContext();
             _controller.ControllerContext = new ControllerContext

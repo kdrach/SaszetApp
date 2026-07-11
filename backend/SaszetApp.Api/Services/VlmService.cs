@@ -5,10 +5,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using SaszetApp.Api.Data;
@@ -300,6 +298,63 @@ namespace SaszetApp.Api.Services
             }
 
             throw new NotSupportedException($"Provider {provider} is not supported.");
+        }
+        public async Task TestConnectionAsync(LlmProviderEntity provider, System.Threading.CancellationToken cancellationToken)
+        {
+            var decryptedKey = _encryptionService.Decrypt(provider.EncryptedApiKey);
+            if (string.IsNullOrWhiteSpace(decryptedKey)) 
+                throw new InvalidOperationException("Invalid or missing API key.");
+                
+            var client = _httpClientFactory.CreateClient();
+            
+            var modelName = provider.ModelName;
+            if (provider.ProviderName == "Gemini" && modelName.StartsWith("models/"))
+            {
+                modelName = modelName.Substring("models/".Length);
+            }
+            var encodedModel = System.Net.WebUtility.UrlEncode(modelName);
+
+            if (provider.ProviderName == "Anthropic")
+            {
+                client.DefaultRequestHeaders.Add("x-api-key", decryptedKey);
+                client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+                
+                var requestBody = new
+                {
+                    model = encodedModel,
+                    max_tokens = 1,
+                    messages = new[] { new { role = "user", content = "Test" } }
+                };
+                var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+                var response = await client.PostAsync("https://api.anthropic.com/v1/messages", content, cancellationToken);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new InvalidOperationException("Connection test failed.");
+                }
+            }
+            else if (provider.ProviderName == "Gemini")
+            {
+                client.DefaultRequestHeaders.Add("x-goog-api-key", decryptedKey);
+                var url = $"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}";
+                var response = await client.GetAsync(url, cancellationToken);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new InvalidOperationException("Connection test failed.");
+                }
+            }
+            else
+            {
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", decryptedKey);
+                var url = $"https://api.openai.com/v1/models/{encodedModel}";
+                var response = await client.GetAsync(url, cancellationToken);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new InvalidOperationException("Connection test failed.");
+                }
+            }
         }
     }
 }

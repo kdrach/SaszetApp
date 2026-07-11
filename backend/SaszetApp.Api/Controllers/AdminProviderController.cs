@@ -20,14 +20,14 @@ namespace SaszetApp.Api.Controllers
         private readonly AppDbContext _dbContext;
         private readonly ILlmProviderModelMapper _mapper;
         private readonly IEncryptionService _encryptionService;
-        private readonly System.Net.Http.IHttpClientFactory _httpClientFactory;
+        private readonly IVlmService _vlmService;
 
-        public AdminProviderController(AppDbContext dbContext, ILlmProviderModelMapper mapper, IEncryptionService encryptionService, System.Net.Http.IHttpClientFactory httpClientFactory)
+        public AdminProviderController(AppDbContext dbContext, ILlmProviderModelMapper mapper, IEncryptionService encryptionService, IVlmService vlmService)
         {
             _dbContext = dbContext;
             _mapper = mapper;
             _encryptionService = encryptionService;
-            _httpClientFactory = httpClientFactory;
+            _vlmService = vlmService;
         }
 
         [HttpGet]
@@ -113,10 +113,60 @@ namespace SaszetApp.Api.Controllers
             }
         }
 
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateProvider(Guid id, [FromBody] CreateProviderDto dto)
+        {
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            try
+            {
+                var entity = await _dbContext.LlmProviders.FindAsync(id);
+                if (entity == null) return NotFound();
+
+                if (!dto.IsPrimary && entity.IsPrimary)
+                {
+                    var primaryCount = await _dbContext.LlmProviders.CountAsync(p => p.IsPrimary);
+                    if (primaryCount <= 1)
+                    {
+                        return BadRequest("Cannot unset the last primary provider.");
+                    }
+                }
+
+                if (dto.IsPrimary && !entity.IsPrimary)
+                {
+                    var currentPrimary = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary);
+                    if (currentPrimary != null)
+                    {
+                        currentPrimary.IsPrimary = false;
+                    }
+                }
+
+                entity.ProviderName = dto.ProviderName;
+                entity.ModelName = dto.ModelName;
+                if (dto.ApiKey != "KEEP_EXISTING")
+                {
+                    entity.EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey);
+                }
+                entity.IsPrimary = dto.IsPrimary;
+                entity.IsActive = dto.IsActive;
+
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                var model = _mapper.MapToModel(entity);
+                model.EncryptedApiKey = "********";
+                return Ok(model);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
         [HttpPut("{id}/set-primary")]
         public async Task<IActionResult> SetPrimary(Guid id)
         {
-            using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             try
             {
                 var provider = await _dbContext.LlmProviders.FindAsync(id);
@@ -142,48 +192,19 @@ namespace SaszetApp.Api.Controllers
         }
 
         [HttpPost("{id}/test")]
-        public async Task<IActionResult> TestConnection(Guid id)
+        public async Task<IActionResult> TestConnection(Guid id, System.Threading.CancellationToken cancellationToken)
         {
             var provider = await _dbContext.LlmProviders.FindAsync(id);
             if (provider == null) return NotFound();
             
-            var decryptedKey = _encryptionService.Decrypt(provider.EncryptedApiKey);
-            if (string.IsNullOrWhiteSpace(decryptedKey)) 
-                return BadRequest("Invalid or missing API key.");
-                
             try
             {
-                using var client = _httpClientFactory.CreateClient();
-                
-                string url = provider.ProviderName switch
-                {
-                    "Anthropic" => "https://api.anthropic.com/v1/models",
-                    "Gemini" => "https://generativelanguage.googleapis.com/v1beta/models",
-                    _ => "https://api.openai.com/v1/models"
-                };
-
-                if (provider.ProviderName == "Anthropic")
-                {
-                    client.DefaultRequestHeaders.Add("x-api-key", decryptedKey);
-                    client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
-                }
-                else if (provider.ProviderName == "Gemini")
-                {
-                    client.DefaultRequestHeaders.Add("x-goog-api-key", decryptedKey);
-                }
-                else
-                {
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", decryptedKey);
-                }
-                
-                // Minimal validation/ping
-                var response = await client.GetAsync(url);
-                response.EnsureSuccessStatusCode();
+                await _vlmService.TestConnectionAsync(provider, cancellationToken);
                 return Ok(new { status = "Connection tested successfully." });
             }
-            catch (System.Exception ex)
+            catch (System.Exception)
             {
-                return BadRequest(new { message = "Connection test failed.", details = ex.Message });
+                return BadRequest(new { message = "Connection test failed." });
             }
         }
     }
