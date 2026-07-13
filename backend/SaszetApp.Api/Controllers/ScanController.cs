@@ -22,16 +22,16 @@ namespace SaszetApp.Api.Controllers
         private readonly IPetFoodModelMapper _mapper;
         private readonly ILogger<ScanController> _logger;
         private readonly IEncryptionService _encryptionService;
-        private readonly IRateLimitingService _rateLimitingService;
+        private readonly IScanQuotaService _scanQuotaService;
 
-        public ScanController(AppDbContext dbContext, IVlmService vlmService, IPetFoodModelMapper mapper, ILogger<ScanController> logger, IEncryptionService encryptionService, IRateLimitingService rateLimitingService)
+        public ScanController(AppDbContext dbContext, IVlmService vlmService, IPetFoodModelMapper mapper, ILogger<ScanController> logger, IEncryptionService encryptionService, IScanQuotaService scanQuotaService)
         {
             _dbContext = dbContext;
             _vlmService = vlmService;
             _mapper = mapper;
             _logger = logger;
             _encryptionService = encryptionService;
-            _rateLimitingService = rateLimitingService;
+            _scanQuotaService = scanQuotaService;
         }
 
         [HttpGet("search")]
@@ -67,25 +67,28 @@ namespace SaszetApp.Api.Controllers
             }
 
             // Fallback to VLM
+            var allowed = await _scanQuotaService.CheckLimitAsync(userId, cancellationToken);
+            if (!allowed)
+            {
+                return StatusCode(429, new { message = "You have reached your scan limit." });
+            }
+
+            var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
+            if (providerEntity == null)
+            {
+                _logger.LogWarning("LLM Provider is missing.");
+                return StatusCode(503, new { message = "No active primary LLM provider configured." });
+            }
+            var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
+
+            var usageEntity = _scanQuotaService.RecordUsage(userId);
+
+            PetFoodItemEntity newEntity;
             try
             {
-                var allowed = await _rateLimitingService.CheckLimitAsync(userId);
-                if (!allowed)
-                {
-                    return StatusCode(429, new { message = "You have reached your scan limit." });
-                }
-
-                var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
-                if (providerEntity == null)
-                {
-                    _logger.LogWarning("LLM Provider is missing.");
-                    return StatusCode(503, new { message = "No active primary LLM provider configured." });
-                }
-                var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
-
                 var result = await _vlmService.AnalyzeProductAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, query, language, cancellationToken);
 
-                var newEntity = new PetFoodItemEntity
+                newEntity = new PetFoodItemEntity
                 {
                     Id = Guid.NewGuid(),
                     UserId = userId,
@@ -107,18 +110,19 @@ namespace SaszetApp.Api.Controllers
                 _dbContext.PetFoodItems.Add(newEntity);
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
-                await _rateLimitingService.RecordUsageAsync(userId);
-
                 return Ok(_mapper.MapToModel(newEntity));
             }
             catch (Exception ex)
             {
+                _dbContext.UserScanUsages.Remove(usageEntity);
                 _logger.LogError(ex, "Error analyzing product.");
                 return StatusCode(500, new { message = "Error analyzing product." });
             }
         }
         [HttpPost("analyze-image")]
         [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ScanRatePolicy")]
+        [RequestSizeLimit(5 * 1024 * 1024)]
+        [RequestFormLimits(MultipartBodyLengthLimit = 5242880)]
         public async Task<IActionResult> AnalyzeImage(IFormFile image, [FromForm] ScanMode mode, System.Threading.CancellationToken cancellationToken)
         {
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -140,25 +144,28 @@ namespace SaszetApp.Api.Controllers
             memoryStream.Position = 0;
             var base64Image = Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
 
+            var allowed = await _scanQuotaService.CheckLimitAsync(userId, cancellationToken);
+            if (!allowed)
+            {
+                return StatusCode(429, new { message = "You have reached your scan limit." });
+            }
+
+            var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
+            if (providerEntity == null)
+            {
+                _logger.LogWarning("LLM Provider is missing.");
+                return StatusCode(503, new { message = "No active primary LLM provider configured." });
+            }
+            var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
+
+            var usageEntity = _scanQuotaService.RecordUsage(userId);
+
+            PetFoodItemEntity newEntity;
             try
             {
-                var allowed = await _rateLimitingService.CheckLimitAsync(userId);
-                if (!allowed)
-                {
-                    return StatusCode(429, new { message = "You have reached your scan limit." });
-                }
-
-                var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
-                if (providerEntity == null)
-                {
-                    _logger.LogWarning("LLM Provider is missing.");
-                    return StatusCode(503, new { message = "No active primary LLM provider configured." });
-                }
-                var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
-
                 var result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, image.ContentType, mode, language, cancellationToken);
 
-                var newEntity = new PetFoodItemEntity
+                newEntity = new PetFoodItemEntity
                 {
                     Id = Guid.NewGuid(),
                     UserId = userId,
@@ -175,16 +182,16 @@ namespace SaszetApp.Api.Controllers
                 _dbContext.PetFoodItems.Add(newEntity);
                 await _dbContext.SaveChangesAsync(cancellationToken);
 
-                await _rateLimitingService.RecordUsageAsync(userId);
-
                 return Ok(_mapper.MapToModel(newEntity));
             }
             catch (InvalidOperationException ex) when (ex.Message == "NO_PET_FOOD_FOUND")
             {
+                _dbContext.UserScanUsages.Remove(usageEntity);
                 return StatusCode(422, new { errorCode = "NO_PET_FOOD_FOUND" });
             }
             catch (Exception ex)
             {
+                _dbContext.UserScanUsages.Remove(usageEntity);
                 _logger.LogError(ex, "Error analyzing image.");
                 return StatusCode(500, new { message = "Error analyzing image." });
             }

@@ -18,7 +18,7 @@ namespace SaszetApp.Api.Tests
         private readonly AppDbContext _dbContext;
         private readonly Mock<IVlmService> _mockVlmService;
         private readonly Mock<IEncryptionService> _mockEncryptionService;
-        private readonly Mock<IRateLimitingService> _mockRateLimitingService;
+        private readonly Mock<IScanQuotaService> _mockScanQuotaService;
         private readonly IPetFoodModelMapper _mapper;
         private readonly ScanController _controller;
 
@@ -32,11 +32,12 @@ namespace SaszetApp.Api.Tests
             _mockVlmService = new Mock<IVlmService>();
             _mockEncryptionService = new Mock<IEncryptionService>();
             _mockEncryptionService.Setup(e => e.Decrypt(It.IsAny<string>())).Returns("test-key");
-            _mockRateLimitingService = new Mock<IRateLimitingService>();
-            _mockRateLimitingService.Setup(r => r.CheckLimitAsync(It.IsAny<string>())).ReturnsAsync(true);
+            _mockScanQuotaService = new Mock<IScanQuotaService>();
+            _mockScanQuotaService.Setup(r => r.CheckLimitAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(true);
+            _mockScanQuotaService.Setup(r => r.RecordUsage(It.IsAny<string>())).Returns(new UserScanUsageEntity());
             _mapper = new PetFoodModelMapper();
 
-            _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance, _mockEncryptionService.Object, _mockRateLimitingService.Object);
+            _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance, _mockEncryptionService.Object, _mockScanQuotaService.Object);
             
             var httpContext = new DefaultHttpContext();
             var identity = new System.Security.Claims.ClaimsIdentity(new[]
@@ -239,7 +240,7 @@ namespace SaszetApp.Api.Tests
         [Fact]
         public async Task Search_LimitExceeded_Returns429TooManyRequests()
         {
-            _mockRateLimitingService.Setup(r => r.CheckLimitAsync(It.IsAny<string>())).ReturnsAsync(false);
+            _mockScanQuotaService.Setup(r => r.CheckLimitAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(false);
             var result = await _controller.Search("9999", System.Threading.CancellationToken.None);
             var objectResult = Assert.IsType<ObjectResult>(result);
             Assert.Equal(429, objectResult.StatusCode);
@@ -257,7 +258,7 @@ namespace SaszetApp.Api.Tests
                 .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
                 .Returns(Task.CompletedTask);
 
-            _mockRateLimitingService.Setup(r => r.CheckLimitAsync(It.IsAny<string>())).ReturnsAsync(false);
+            _mockScanQuotaService.Setup(r => r.CheckLimitAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(false);
             var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
             var objectResult = Assert.IsType<ObjectResult>(result);
             Assert.Equal(429, objectResult.StatusCode);

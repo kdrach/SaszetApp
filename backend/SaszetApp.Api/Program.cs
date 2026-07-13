@@ -38,7 +38,8 @@ builder.Services.AddScoped<SaszetApp.Api.Services.Mappers.IPetFoodModelMapper, S
 builder.Services.AddScoped<SaszetApp.Api.Services.Mappers.ILlmProviderModelMapper, SaszetApp.Api.Services.Mappers.LlmProviderModelMapper>();
 builder.Services.AddSingleton<SaszetApp.Api.Services.IEncryptionService, SaszetApp.Api.Services.EncryptionService>();
 builder.Services.AddScoped<SaszetApp.Api.Services.IVlmService, SaszetApp.Api.Services.VlmService>();
-builder.Services.AddScoped<SaszetApp.Api.Services.IRateLimitingService, SaszetApp.Api.Services.RateLimitingService>();
+builder.Services.AddScoped<SaszetApp.Api.Services.IScanQuotaService, SaszetApp.Api.Services.ScanQuotaService>();
+builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient(); // Add HttpClient factory for VLM service
 builder.Services.AddHealthChecks();
 
