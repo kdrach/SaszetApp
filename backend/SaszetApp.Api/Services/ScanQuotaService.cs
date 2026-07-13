@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,7 +11,13 @@ namespace SaszetApp.Api.Services
 {
     public class ScanQuotaService : IScanQuotaService
     {
-        private static readonly ConcurrentDictionary<string, Lazy<SemaphoreSlim>> _userLocks = new();
+        private class RefCountedSemaphore
+        {
+            public SemaphoreSlim Semaphore { get; } = new SemaphoreSlim(1, 1);
+            public int RefCount { get; set; }
+        }
+
+        private static readonly Dictionary<string, RefCountedSemaphore> _userLocks = new();
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly IMemoryCache _cache;
 
@@ -66,9 +72,21 @@ namespace SaszetApp.Api.Services
 
             var thresholdDate = DateTime.UtcNow.AddDays(-rollingDays);
 
-            var userLock = _userLocks.GetOrAdd(userId, _ => new Lazy<SemaphoreSlim>(() => new SemaphoreSlim(1, 1))).Value;
+            RefCountedSemaphore userLock;
+            lock (_userLocks)
+            {
+                if (!_userLocks.TryGetValue(userId, out userLock))
+                {
+                    userLock = new RefCountedSemaphore { RefCount = 1 };
+                    _userLocks[userId] = userLock;
+                }
+                else
+                {
+                    userLock.RefCount++;
+                }
+            }
 
-            await userLock.WaitAsync(cancellationToken);
+            await userLock.Semaphore.WaitAsync(cancellationToken);
             try
             {
                 var strategy = dbContext.Database.CreateExecutionStrategy();
@@ -99,7 +117,16 @@ namespace SaszetApp.Api.Services
             }
             finally
             {
-                userLock.Release();
+                userLock.Semaphore.Release();
+                lock (_userLocks)
+                {
+                    userLock.RefCount--;
+                    if (userLock.RefCount == 0)
+                    {
+                        _userLocks.Remove(userId);
+                        userLock.Semaphore.Dispose();
+                    }
+                }
             }
         }
 
@@ -107,9 +134,21 @@ namespace SaszetApp.Api.Services
         {
             if (entity == null) return;
 
-            var userLock = _userLocks.GetOrAdd(entity.UserId, _ => new Lazy<SemaphoreSlim>(() => new SemaphoreSlim(1, 1))).Value;
+            RefCountedSemaphore userLock;
+            lock (_userLocks)
+            {
+                if (!_userLocks.TryGetValue(entity.UserId, out userLock))
+                {
+                    userLock = new RefCountedSemaphore { RefCount = 1 };
+                    _userLocks[entity.UserId] = userLock;
+                }
+                else
+                {
+                    userLock.RefCount++;
+                }
+            }
 
-            await userLock.WaitAsync(cancellationToken);
+            await userLock.Semaphore.WaitAsync(cancellationToken);
             try
             {
                 using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -123,7 +162,16 @@ namespace SaszetApp.Api.Services
             }
             finally
             {
-                userLock.Release();
+                userLock.Semaphore.Release();
+                lock (_userLocks)
+                {
+                    userLock.RefCount--;
+                    if (userLock.RefCount == 0)
+                    {
+                        _userLocks.Remove(entity.UserId);
+                        userLock.Semaphore.Dispose();
+                    }
+                }
             }
         }
     }
