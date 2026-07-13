@@ -11,6 +11,7 @@ namespace SaszetApp.Api.Services
 {
     public class ScanQuotaService : IScanQuotaService
     {
+        private static readonly ConcurrentDictionary<string, Lazy<SemaphoreSlim>> _userLocks = new();
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly IMemoryCache _cache;
 
@@ -65,20 +66,7 @@ namespace SaszetApp.Api.Services
 
             var thresholdDate = DateTime.UtcNow.AddDays(-rollingDays);
 
-            var userLockLazy = _cache.GetOrCreate($"ScanLock_{userId}", entry =>
-            {
-                entry.SlidingExpiration = TimeSpan.FromMinutes(10);
-                entry.RegisterPostEvictionCallback((key, value, reason, state) =>
-                {
-                    if (value is Lazy<SemaphoreSlim> lazy && lazy.IsValueCreated)
-                    {
-                        lazy.Value.Dispose();
-                    }
-                });
-                return new Lazy<SemaphoreSlim>(() => new SemaphoreSlim(1, 1));
-            }) ?? new Lazy<SemaphoreSlim>(() => new SemaphoreSlim(1, 1));
-
-            var userLock = userLockLazy.Value;
+            var userLock = _userLocks.GetOrAdd(userId, _ => new Lazy<SemaphoreSlim>(() => new SemaphoreSlim(1, 1))).Value;
 
             await userLock.WaitAsync(cancellationToken);
             try
@@ -119,20 +107,7 @@ namespace SaszetApp.Api.Services
         {
             if (entity == null) return;
 
-            var userLockLazy = _cache.GetOrCreate($"ScanLock_{entity.UserId}", entry =>
-            {
-                entry.SlidingExpiration = TimeSpan.FromMinutes(10);
-                entry.RegisterPostEvictionCallback((key, value, reason, state) =>
-                {
-                    if (value is Lazy<SemaphoreSlim> lazy && lazy.IsValueCreated)
-                    {
-                        lazy.Value.Dispose();
-                    }
-                });
-                return new Lazy<SemaphoreSlim>(() => new SemaphoreSlim(1, 1));
-            }) ?? new Lazy<SemaphoreSlim>(() => new SemaphoreSlim(1, 1));
-
-            var userLock = userLockLazy.Value;
+            var userLock = _userLocks.GetOrAdd(entity.UserId, _ => new Lazy<SemaphoreSlim>(() => new SemaphoreSlim(1, 1))).Value;
 
             await userLock.WaitAsync(cancellationToken);
             try
