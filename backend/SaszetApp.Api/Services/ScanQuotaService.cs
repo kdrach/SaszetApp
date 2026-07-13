@@ -120,7 +120,7 @@ namespace SaszetApp.Api.Services
                         ScannedAt = DateTime.UtcNow
                     };
                     dbContext.UserScanUsages.Add(entity);
-                    await dbContext.SaveChangesAsync(cancellationToken);
+                    await dbContext.SaveChangesAsync(CancellationToken.None);
 
                     return entity;
                 });
@@ -171,7 +171,7 @@ namespace SaszetApp.Api.Services
                 var strategy = dbContext.Database.CreateExecutionStrategy();
                 await strategy.ExecuteAsync(async () =>
                 {
-                    await dbContext.UserScanUsages.Where(u => u.Id == entity.Id).ExecuteDeleteAsync(cancellationToken);
+                    await dbContext.UserScanUsages.Where(u => u.Id == entity.Id).ExecuteDeleteAsync(CancellationToken.None);
                 });
             }
             finally
