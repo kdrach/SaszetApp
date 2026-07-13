@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { providersApi } from '../api/providersApi';
 import { LlmProvider, CreateProviderDto } from '../types';
 import ProviderCard from '../components/ProviderCard';
-import { ShieldCheck, Settings } from 'lucide-react';
-import * as adminSettingsApi from '../api/adminSettingsApi';
+import { ShieldCheck } from 'lucide-react';
 
 const SUPPORTED_PROVIDERS = ['OpenAI', 'Anthropic', 'Gemini'];
 
@@ -12,20 +11,13 @@ const AdminDashboardView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [globalSettings, setGlobalSettings] = useState<adminSettingsApi.GlobalSettings>({ globalScanLimit: 5, scanLimitRollingDays: 7 });
-  const [userLimitSearchId, setUserLimitSearchId] = useState('');
-  const [userLimitResult, setUserLimitResult] = useState<adminSettingsApi.UserLimit | null>(null);
-  const [userLimitInput, setUserLimitInput] = useState<number>(5);
+
 
   const fetchData = async () => {
     try {
       const data = await providersApi.getProviders();
       setProviders(data);
-      const token = localStorage.getItem('access_token') || ''; // We should get the token from auth context, assuming it's managed somewhere
-      if (token) {
-          const settings = await adminSettingsApi.getGlobalSettings(token);
-          setGlobalSettings(settings);
-      }
+
     } catch (err: any) {
       setError(err.message || 'Failed to fetch data');
     } finally {
@@ -73,43 +65,7 @@ const AdminDashboardView: React.FC = () => {
 
   const primaryProvider = providers.find(p => p.isPrimary);
 
-  const handleSaveGlobalSettings = async () => {
-      try {
-          const token = localStorage.getItem('access_token') || '';
-          await adminSettingsApi.updateGlobalSettings(token, globalSettings);
-          alert('Zapisano ustawienia globalne!');
-      } catch (err: any) {
-          setError('Błąd zapisu ustawień: ' + err.message);
-      }
-  };
 
-  const handleSearchUserLimit = async () => {
-      if (!userLimitSearchId) return;
-      try {
-          const token = localStorage.getItem('access_token') || '';
-          const result = await adminSettingsApi.getUserLimit(token, userLimitSearchId);
-          setUserLimitResult(result);
-          setUserLimitInput(result.maxScans);
-      } catch (err: any) {
-          if (err.response?.status === 404) {
-              setUserLimitResult({ userId: userLimitSearchId, maxScans: globalSettings.globalScanLimit });
-              setUserLimitInput(globalSettings.globalScanLimit);
-          } else {
-              setError('Błąd wyszukiwania: ' + err.message);
-          }
-      }
-  };
-
-  const handleSaveUserLimit = async () => {
-      if (!userLimitResult) return;
-      try {
-          const token = localStorage.getItem('access_token') || '';
-          await adminSettingsApi.updateUserLimit(token, userLimitResult.userId, userLimitInput);
-          alert('Zapisano limit dla użytkownika!');
-      } catch (err: any) {
-          setError('Błąd zapisu limitu: ' + err.message);
-      }
-  };
 
   if (loading) return <div className="text-gray-500">Loading configurations...</div>;
 
@@ -141,43 +97,7 @@ const AdminDashboardView: React.FC = () => {
         </div>
       </div>
 
-      {/* Rate Limits Config */}
-      <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
-        <div className="flex items-center gap-3 mb-6">
-            <Settings className="text-blue-500" />
-            <h3 className="text-xl font-bold text-gray-900">Limity Skanowań (Rate Limits)</h3>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="space-y-4">
-                <h4 className="font-semibold text-gray-700">Ustawienia Globalne</h4>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Domyślny limit skanowań</label>
-                    <input type="number" value={globalSettings.globalScanLimit} onChange={e => setGlobalSettings({...globalSettings, globalScanLimit: parseInt(e.target.value)})} className="w-full px-4 py-2 border rounded-lg" />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Okres limitu (w dniach)</label>
-                    <input type="number" value={globalSettings.scanLimitRollingDays} onChange={e => setGlobalSettings({...globalSettings, scanLimitRollingDays: parseInt(e.target.value)})} className="w-full px-4 py-2 border rounded-lg" />
-                </div>
-                <button onClick={handleSaveGlobalSettings} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition">Zapisz Globalne</button>
-            </div>
-            <div className="space-y-4 border-t lg:border-t-0 lg:border-l pt-6 lg:pt-0 lg:pl-8 border-gray-200">
-                <h4 className="font-semibold text-gray-700">Limit Użytkownika</h4>
-                <div className="flex gap-2">
-                    <input type="text" placeholder="ID Użytkownika..." value={userLimitSearchId} onChange={e => setUserLimitSearchId(e.target.value)} className="flex-1 px-4 py-2 border rounded-lg" />
-                    <button onClick={handleSearchUserLimit} className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900">Szukaj</button>
-                </div>
-                {userLimitResult && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-4 border border-gray-200">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Limit dla {userLimitResult.userId}</label>
-                            <input type="number" value={userLimitInput} onChange={e => setUserLimitInput(parseInt(e.target.value))} className="w-full px-4 py-2 border rounded-lg" />
-                        </div>
-                        <button onClick={handleSaveUserLimit} className="w-full bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700 transition">Ustaw Limit</button>
-                    </div>
-                )}
-            </div>
-        </div>
-      </div>
+
 
       <div>
         <h3 className="text-lg font-bold text-gray-900 mb-4">Dostępni Dostawcy</h3>

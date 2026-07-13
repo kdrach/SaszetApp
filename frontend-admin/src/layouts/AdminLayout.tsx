@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '../components/AuthProvider';
 import { LogOut, Activity } from 'lucide-react';
 
@@ -24,9 +24,29 @@ const AdminLayout: React.FC = () => {
         <nav className="flex-1 px-4 py-4">
           <ul className="space-y-2">
             <li>
-              <a href="#" className="flex items-center gap-3 px-3 py-2 text-primary bg-emerald-50 rounded-lg font-medium">
+              <NavLink 
+                to="/" 
+                end
+                className={({ isActive }) => 
+                  `flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
+                    isActive ? 'text-primary bg-emerald-50' : 'text-gray-600 hover:text-primary hover:bg-gray-50'
+                  }`
+                }
+              >
                 Konfiguracja LLM
-              </a>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink 
+                to="/rate-limits" 
+                className={({ isActive }) => 
+                  `flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${
+                    isActive ? 'text-primary bg-emerald-50' : 'text-gray-600 hover:text-primary hover:bg-gray-50'
+                  }`
+                }
+              >
+                Limity Skanowań
+              </NavLink>
             </li>
           </ul>
         </nav>

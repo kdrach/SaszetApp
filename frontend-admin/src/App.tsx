@@ -5,6 +5,8 @@ import AdminLayout from './layouts/AdminLayout';
 import AdminDashboardView from './pages/AdminDashboardView';
 import ProtectedRoute from './components/ProtectedRoute';
 
+import RateLimitsView from './pages/RateLimitsView';
+
 function App() {
   const { initialized } = useAuth();
 
@@ -17,6 +19,7 @@ function App() {
       <Routes>
         <Route path="/" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
           <Route index element={<AdminDashboardView />} />
+          <Route path="rate-limits" element={<RateLimitsView />} />
         </Route>
       </Routes>
     </BrowserRouter>

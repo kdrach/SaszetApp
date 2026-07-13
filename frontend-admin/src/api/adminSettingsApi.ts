@@ -39,3 +39,26 @@ export const updateUserLimit = async (token: string, userId: string, maxScans: n
   });
   return response.data;
 };
+
+export interface UserLimitDto {
+  userId: string;
+  usage: number;
+  maxScans: number;
+  lastReset: string;
+}
+
+export const getAllUsersLimits = async (token: string): Promise<UserLimitDto[]> => {
+  // Mock Data for UX validation before backend implementation
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve([
+        { userId: 'user_123_abc', usage: 3, maxScans: 5, lastReset: new Date().toISOString() },
+        { userId: 'user_456_def', usage: 5, maxScans: 5, lastReset: new Date().toISOString() },
+        { userId: 'user_789_ghi', usage: 1, maxScans: 10, lastReset: new Date().toISOString() },
+        { userId: 'user_999_xyz', usage: 12, maxScans: 15, lastReset: new Date().toISOString() },
+        { userId: 'user_000_foo', usage: 0, maxScans: 5, lastReset: new Date().toISOString() },
+      ]);
+    }, 500);
+  });
+};
+
