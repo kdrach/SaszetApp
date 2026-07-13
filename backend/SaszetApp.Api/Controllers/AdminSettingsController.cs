@@ -61,7 +61,7 @@ namespace SaszetApp.Api.Controllers
                 daysEntity.Value = dto.ScanLimitRollingDays.ToString();
             }
 
-            await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
             return Ok(dto);
         }
 
@@ -95,7 +95,7 @@ namespace SaszetApp.Api.Controllers
                 userLimit.MaxScans = dto.MaxScans;
             }
             
-            await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
             return Ok(dto);
         }
     }

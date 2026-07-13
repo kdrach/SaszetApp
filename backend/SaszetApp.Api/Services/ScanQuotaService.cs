@@ -164,10 +164,10 @@ namespace SaszetApp.Api.Services
             bool lockAcquired = false;
             try
             {
-                await userLock.Semaphore.WaitAsync(cancellationToken);
+                await userLock.Semaphore.WaitAsync(CancellationToken.None);
                 lockAcquired = true;
 
-                using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+                using var dbContext = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
                 var strategy = dbContext.Database.CreateExecutionStrategy();
                 await strategy.ExecuteAsync(async () =>
                 {

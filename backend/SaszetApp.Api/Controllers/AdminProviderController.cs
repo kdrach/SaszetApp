@@ -99,7 +99,7 @@ namespace SaszetApp.Api.Controllers
                     };
                     _dbContext.LlmProviders.Add(entity);
                 }
-                await _dbContext.SaveChangesAsync();
+                await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
                 await transaction.CommitAsync();
 
                 var model = _mapper.MapToModel(entity);
@@ -149,7 +149,7 @@ namespace SaszetApp.Api.Controllers
                 entity.IsPrimary = dto.IsPrimary;
                 entity.IsActive = dto.IsActive;
 
-                await _dbContext.SaveChangesAsync();
+                await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
                 await transaction.CommitAsync();
 
                 var model = _mapper.MapToModel(entity);
@@ -179,7 +179,7 @@ namespace SaszetApp.Api.Controllers
                 }
 
                 provider.IsPrimary = true;
-                await _dbContext.SaveChangesAsync();
+                await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
                 await transaction.CommitAsync();
 
                 return Ok();

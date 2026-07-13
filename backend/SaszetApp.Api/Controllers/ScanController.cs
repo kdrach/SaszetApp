@@ -73,18 +73,18 @@ namespace SaszetApp.Api.Controllers
                 return StatusCode(429, new { message = "You have reached your scan limit." });
             }
 
-            var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
-            if (providerEntity == null)
-            {
-                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
-                _logger.LogWarning("LLM Provider is missing.");
-                return StatusCode(503, new { message = "No active primary LLM provider configured." });
-            }
-            var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
-
             PetFoodItemEntity newEntity;
             try
             {
+                var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
+                if (providerEntity == null)
+                {
+                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                    _logger.LogWarning("LLM Provider is missing.");
+                    return StatusCode(503, new { message = "No active primary LLM provider configured." });
+                }
+                var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
+
                 var result = await _vlmService.AnalyzeProductAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, query, language, cancellationToken);
 
                 newEntity = new PetFoodItemEntity
@@ -107,7 +107,7 @@ namespace SaszetApp.Api.Controllers
                 }
 
                 _dbContext.PetFoodItems.Add(newEntity);
-                await _dbContext.SaveChangesAsync(cancellationToken);
+                await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
 
                 return Ok(_mapper.MapToModel(newEntity));
             }
@@ -149,18 +149,18 @@ namespace SaszetApp.Api.Controllers
                 return StatusCode(429, new { message = "You have reached your scan limit." });
             }
 
-            var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
-            if (providerEntity == null)
-            {
-                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
-                _logger.LogWarning("LLM Provider is missing.");
-                return StatusCode(503, new { message = "No active primary LLM provider configured." });
-            }
-            var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
-
             PetFoodItemEntity newEntity;
             try
             {
+                var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
+                if (providerEntity == null)
+                {
+                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                    _logger.LogWarning("LLM Provider is missing.");
+                    return StatusCode(503, new { message = "No active primary LLM provider configured." });
+                }
+                var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
+
                 var result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, image.ContentType, mode, language, cancellationToken);
 
                 newEntity = new PetFoodItemEntity
@@ -178,7 +178,7 @@ namespace SaszetApp.Api.Controllers
                 };
 
                 _dbContext.PetFoodItems.Add(newEntity);
-                await _dbContext.SaveChangesAsync(cancellationToken);
+                await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
 
                 return Ok(_mapper.MapToModel(newEntity));
             }
