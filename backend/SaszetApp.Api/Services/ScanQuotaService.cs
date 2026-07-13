@@ -11,7 +11,6 @@ namespace SaszetApp.Api.Services
 {
     public class ScanQuotaService : IScanQuotaService
     {
-        private static readonly ConcurrentDictionary<string, SemaphoreSlim> _userLocks = new();
         private readonly AppDbContext _dbContext;
         private readonly IMemoryCache _cache;
 
@@ -64,13 +63,20 @@ namespace SaszetApp.Api.Services
 
             var thresholdDate = DateTime.UtcNow.AddDays(-rollingDays);
 
-            var userLock = _userLocks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
+            var userLock = _cache.GetOrCreate(userId, entry =>
+            {
+                entry.SlidingExpiration = TimeSpan.FromMinutes(10);
+                return new SemaphoreSlim(1, 1);
+            }) ?? new SemaphoreSlim(1, 1);
+
             await userLock.WaitAsync(cancellationToken);
             try
             {
                 var strategy = _dbContext.Database.CreateExecutionStrategy();
                 return await strategy.ExecuteAsync(async () =>
                 {
+                    _dbContext.ChangeTracker.Clear();
+
                     var usageCount = await _dbContext.UserScanUsages
                         .Where(u => u.UserId == userId && u.ScannedAt >= thresholdDate)
                         .CountAsync(cancellationToken);
@@ -102,9 +108,27 @@ namespace SaszetApp.Api.Services
         {
             if (entity == null) return;
 
-            _dbContext.ChangeTracker.Clear();
-            _dbContext.UserScanUsages.Remove(entity);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            var userLock = _cache.GetOrCreate(entity.UserId, entry =>
+            {
+                entry.SlidingExpiration = TimeSpan.FromMinutes(10);
+                return new SemaphoreSlim(1, 1);
+            }) ?? new SemaphoreSlim(1, 1);
+
+            await userLock.WaitAsync(cancellationToken);
+            try
+            {
+                var strategy = _dbContext.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    _dbContext.ChangeTracker.Clear();
+                    _dbContext.UserScanUsages.Remove(entity);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                });
+            }
+            finally
+            {
+                userLock.Release();
+            }
         }
     }
 }
