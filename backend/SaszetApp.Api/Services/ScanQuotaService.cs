@@ -19,7 +19,7 @@ namespace SaszetApp.Api.Services
             _cache = cache;
         }
 
-        public async Task<bool> CheckLimitAsync(string userId, CancellationToken cancellationToken = default)
+        public async Task<UserScanUsageEntity?> CheckAndRecordUsageAsync(string userId, CancellationToken cancellationToken = default)
         {
             int limit = 5;
             int rollingDays = 7;
@@ -61,23 +61,54 @@ namespace SaszetApp.Api.Services
             }
 
             var thresholdDate = DateTime.UtcNow.AddDays(-rollingDays);
-            var usageCount = await _dbContext.UserScanUsages
-                .Where(u => u.UserId == userId && u.ScannedAt >= thresholdDate)
-                .CountAsync(cancellationToken);
 
-            return usageCount < limit;
+            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? transaction = null;
+            if (_dbContext.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
+            {
+                transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+            }
+
+            try
+            {
+                var usageCount = await _dbContext.UserScanUsages
+                    .Where(u => u.UserId == userId && u.ScannedAt >= thresholdDate)
+                    .CountAsync(cancellationToken);
+
+                if (usageCount >= limit)
+                {
+                    if (transaction != null) await transaction.CommitAsync(cancellationToken);
+                    return null;
+                }
+
+                var entity = new UserScanUsageEntity
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    ScannedAt = DateTime.UtcNow
+                };
+                _dbContext.UserScanUsages.Add(entity);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                
+                if (transaction != null) await transaction.CommitAsync(cancellationToken);
+
+                return entity;
+            }
+            catch
+            {
+                if (transaction != null) await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+            finally
+            {
+                if (transaction != null) await transaction.DisposeAsync();
+            }
         }
 
-        public UserScanUsageEntity RecordUsage(string userId)
+        public async Task RefundUsageAsync(UserScanUsageEntity entity, CancellationToken cancellationToken = default)
         {
-            var entity = new UserScanUsageEntity
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                ScannedAt = DateTime.UtcNow
-            };
-            _dbContext.UserScanUsages.Add(entity);
-            return entity;
+            if (entity == null) return;
+            _dbContext.UserScanUsages.Remove(entity);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }
 }

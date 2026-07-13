@@ -33,8 +33,7 @@ namespace SaszetApp.Api.Tests
             _mockEncryptionService = new Mock<IEncryptionService>();
             _mockEncryptionService.Setup(e => e.Decrypt(It.IsAny<string>())).Returns("test-key");
             _mockScanQuotaService = new Mock<IScanQuotaService>();
-            _mockScanQuotaService.Setup(r => r.CheckLimitAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(true);
-            _mockScanQuotaService.Setup(r => r.RecordUsage(It.IsAny<string>())).Returns(new UserScanUsageEntity());
+            _mockScanQuotaService.Setup(r => r.CheckAndRecordUsageAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(new UserScanUsageEntity());
             _mapper = new PetFoodModelMapper();
 
             _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance, _mockEncryptionService.Object, _mockScanQuotaService.Object);
@@ -240,7 +239,7 @@ namespace SaszetApp.Api.Tests
         [Fact]
         public async Task Search_LimitExceeded_Returns429TooManyRequests()
         {
-            _mockScanQuotaService.Setup(r => r.CheckLimitAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(false);
+            _mockScanQuotaService.Setup(r => r.CheckAndRecordUsageAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync((UserScanUsageEntity?)null);
             var result = await _controller.Search("9999", System.Threading.CancellationToken.None);
             var objectResult = Assert.IsType<ObjectResult>(result);
             Assert.Equal(429, objectResult.StatusCode);
@@ -258,7 +257,7 @@ namespace SaszetApp.Api.Tests
                 .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
                 .Returns(Task.CompletedTask);
 
-            _mockScanQuotaService.Setup(r => r.CheckLimitAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(false);
+            _mockScanQuotaService.Setup(r => r.CheckAndRecordUsageAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync((UserScanUsageEntity?)null);
             var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
             var objectResult = Assert.IsType<ObjectResult>(result);
             Assert.Equal(429, objectResult.StatusCode);

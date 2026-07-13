@@ -33,23 +33,21 @@ namespace SaszetApp.Api.Tests
         }
 
         [Fact]
-        public async Task CheckLimitAsync_NoSettings_UsesDefaults_AllowsUpTo5Scans()
+        public async Task CheckAndRecordUsageAsync_NoSettings_UsesDefaults_AllowsUpTo5Scans()
         {
             var userId = "user1";
             for(int i=0; i<5; i++)
             {
-                var allowed = await _scanQuotaService.CheckLimitAsync(userId);
-                Assert.True(allowed);
-                _scanQuotaService.RecordUsage(userId);
-                await _dbContext.SaveChangesAsync();
+                var usage = await _scanQuotaService.CheckAndRecordUsageAsync(userId);
+                Assert.NotNull(usage);
             }
 
-            var allowedAfter5 = await _scanQuotaService.CheckLimitAsync(userId);
-            Assert.False(allowedAfter5);
+            var allowedAfter5 = await _scanQuotaService.CheckAndRecordUsageAsync(userId);
+            Assert.Null(allowedAfter5);
         }
 
         [Fact]
-        public async Task CheckLimitAsync_UserLimitOverridesGlobalLimit()
+        public async Task CheckAndRecordUsageAsync_UserLimitOverridesGlobalLimit()
         {
             var userId = "user2";
             _dbContext.SystemSettings.Add(new SystemSettingEntity { Key = "GlobalScanLimit", Value = "2" });
@@ -58,18 +56,16 @@ namespace SaszetApp.Api.Tests
 
             for(int i=0; i<10; i++)
             {
-                var allowed = await _scanQuotaService.CheckLimitAsync(userId);
-                Assert.True(allowed);
-                _scanQuotaService.RecordUsage(userId);
-                await _dbContext.SaveChangesAsync();
+                var usage = await _scanQuotaService.CheckAndRecordUsageAsync(userId);
+                Assert.NotNull(usage);
             }
 
-            var allowedAfter10 = await _scanQuotaService.CheckLimitAsync(userId);
-            Assert.False(allowedAfter10);
+            var allowedAfter10 = await _scanQuotaService.CheckAndRecordUsageAsync(userId);
+            Assert.Null(allowedAfter10);
         }
 
         [Fact]
-        public async Task CheckLimitAsync_OldScansAreIgnored()
+        public async Task CheckAndRecordUsageAsync_OldScansAreIgnored()
         {
             var userId = "user3";
             _dbContext.SystemSettings.Add(new SystemSettingEntity { Key = "GlobalScanLimit", Value = "1" });
@@ -80,12 +76,12 @@ namespace SaszetApp.Api.Tests
             _dbContext.UserScanUsages.Add(new UserScanUsageEntity { Id = Guid.NewGuid(), UserId = userId, ScannedAt = DateTime.UtcNow.AddDays(-8) });
             await _dbContext.SaveChangesAsync();
 
-            var allowed = await _scanQuotaService.CheckLimitAsync(userId);
-            Assert.True(allowed);
+            var usage = await _scanQuotaService.CheckAndRecordUsageAsync(userId);
+            Assert.NotNull(usage);
         }
 
         [Fact]
-        public async Task CheckLimitAsync_ConcurrentRequests_Respected()
+        public async Task CheckAndRecordUsageAsync_ConcurrentRequests_Respected()
         {
             var userId = "user4";
             var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -99,12 +95,7 @@ namespace SaszetApp.Api.Tests
                 using var context = new AppDbContext(options);
                 var service = new ScanQuotaService(context, cache);
 
-                var allowed = await service.CheckLimitAsync(userId);
-                if (allowed)
-                {
-                    service.RecordUsage(userId);
-                    await context.SaveChangesAsync();
-                }
+                await service.CheckAndRecordUsageAsync(userId);
             });
 
             await Task.WhenAll(tasks);
@@ -112,10 +103,7 @@ namespace SaszetApp.Api.Tests
             using var verifyContext = new AppDbContext(options);
             var usages = await verifyContext.UserScanUsages.CountAsync(u => u.UserId == userId);
             
-            // InMemory DB might not process concurrently as truly parallel depending on scheduling,
-            // but we at least ensure it doesn't crash on Task.WhenAll and limits are applied.
-            Assert.True(usages > 0);
-            Assert.True(usages <= 10);
+            Assert.Equal(5, usages);
         }
     }
 }

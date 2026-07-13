@@ -67,8 +67,8 @@ namespace SaszetApp.Api.Controllers
             }
 
             // Fallback to VLM
-            var allowed = await _scanQuotaService.CheckLimitAsync(userId, cancellationToken);
-            if (!allowed)
+            var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+            if (usageEntity == null)
             {
                 return StatusCode(429, new { message = "You have reached your scan limit." });
             }
@@ -76,12 +76,11 @@ namespace SaszetApp.Api.Controllers
             var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
             if (providerEntity == null)
             {
+                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
                 _logger.LogWarning("LLM Provider is missing.");
                 return StatusCode(503, new { message = "No active primary LLM provider configured." });
             }
             var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
-
-            var usageEntity = _scanQuotaService.RecordUsage(userId);
 
             PetFoodItemEntity newEntity;
             try
@@ -114,7 +113,7 @@ namespace SaszetApp.Api.Controllers
             }
             catch (Exception ex)
             {
-                _dbContext.UserScanUsages.Remove(usageEntity);
+                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
                 _logger.LogError(ex, "Error analyzing product.");
                 return StatusCode(500, new { message = "Error analyzing product." });
             }
@@ -144,8 +143,8 @@ namespace SaszetApp.Api.Controllers
             memoryStream.Position = 0;
             var base64Image = Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
 
-            var allowed = await _scanQuotaService.CheckLimitAsync(userId, cancellationToken);
-            if (!allowed)
+            var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+            if (usageEntity == null)
             {
                 return StatusCode(429, new { message = "You have reached your scan limit." });
             }
@@ -153,12 +152,11 @@ namespace SaszetApp.Api.Controllers
             var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
             if (providerEntity == null)
             {
+                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
                 _logger.LogWarning("LLM Provider is missing.");
                 return StatusCode(503, new { message = "No active primary LLM provider configured." });
             }
             var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
-
-            var usageEntity = _scanQuotaService.RecordUsage(userId);
 
             PetFoodItemEntity newEntity;
             try
@@ -186,12 +184,12 @@ namespace SaszetApp.Api.Controllers
             }
             catch (InvalidOperationException ex) when (ex.Message == "NO_PET_FOOD_FOUND")
             {
-                _dbContext.UserScanUsages.Remove(usageEntity);
+                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
                 return StatusCode(422, new { errorCode = "NO_PET_FOOD_FOUND" });
             }
             catch (Exception ex)
             {
-                _dbContext.UserScanUsages.Remove(usageEntity);
+                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
                 _logger.LogError(ex, "Error analyzing image.");
                 return StatusCode(500, new { message = "Error analyzing image." });
             }

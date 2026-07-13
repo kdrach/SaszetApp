@@ -6,7 +6,7 @@ namespace SaszetApp.Api.Services
 {
     public interface IScanQuotaService
     {
-        Task<bool> CheckLimitAsync(string userId, CancellationToken cancellationToken = default);
-        UserScanUsageEntity RecordUsage(string userId);
+        Task<UserScanUsageEntity?> CheckAndRecordUsageAsync(string userId, CancellationToken cancellationToken = default);
+        Task RefundUsageAsync(UserScanUsageEntity entity, CancellationToken cancellationToken = default);
     }
 }
