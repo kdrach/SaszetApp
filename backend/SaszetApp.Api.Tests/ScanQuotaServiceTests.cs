@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using Moq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using SaszetApp.Api.Data;
@@ -23,7 +25,12 @@ namespace SaszetApp.Api.Tests
 
             _dbContext = new AppDbContext(options);
             _cache = new MemoryCache(new MemoryCacheOptions());
-            _scanQuotaService = new ScanQuotaService(_dbContext, _cache);
+
+            var factoryMock = new Moq.Mock<IDbContextFactory<AppDbContext>>();
+            factoryMock.Setup(f => f.CreateDbContextAsync(Moq.It.IsAny<CancellationToken>()))
+                       .ReturnsAsync(() => new AppDbContext(options));
+
+            _scanQuotaService = new ScanQuotaService(factoryMock.Object, _cache);
         }
 
         public void Dispose()
@@ -92,8 +99,10 @@ namespace SaszetApp.Api.Tests
 
             var tasks = Enumerable.Range(0, 10).Select(async i =>
             {
-                using var context = new AppDbContext(options);
-                var service = new ScanQuotaService(context, cache);
+                var factoryMock = new Moq.Mock<IDbContextFactory<AppDbContext>>();
+                factoryMock.Setup(f => f.CreateDbContextAsync(Moq.It.IsAny<CancellationToken>()))
+                           .ReturnsAsync(() => new AppDbContext(options));
+                var service = new ScanQuotaService(factoryMock.Object, cache);
 
                 await service.CheckAndRecordUsageAsync(userId);
             });
