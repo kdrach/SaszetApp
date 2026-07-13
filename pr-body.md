@@ -1,15 +1,11 @@
 ## Summary
-- Split Keycloak into admin and customer realms.
-- Implemented custom Tailwind theme for customer realm.
-- Added generic SMTP environment variables.
-- Updated backend API to validate JWTs from both realms with specific Auth policies.
+- Fix Keycloak login theme dark mode (added media queries to `custom.css`)
+- Fix the problem with black sidebars on mobile (changed html and body to use 100dvh and width 100%)
+- Improve language dropdown styling in dark mode
+- Add dark mode colors for validation errors and alerts
 
 ## Scope
-Closes #57
-Closes #58
-Closes #59
-Closes #60
-Closes #61
+UI/UX improvement for the Keycloak authentication screen.
 
 ## Validation
-- `dotnet build backend\SaszetApp.Api\SaszetApp.Api.csproj`
+Tested visually by applying styles directly to Keycloak custom.css.

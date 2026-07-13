@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Share, CheckCircle2, XCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Share, CheckCircle2, XCircle, ChevronDown, ChevronUp, AlertTriangle, Hourglass } from 'lucide-react';
 import { fetchAnalysisResult, uploadImageForAnalysis } from '../api/scanApi';
 import { VLMResponseContract } from '../types';
 import LoadingOverlay from '../components/LoadingOverlay';
@@ -47,7 +47,9 @@ export default function ResultView() {
         .catch(err => {
           if (!ignore) {
             console.error(err);
-            if (err?.response?.status === 422 && err?.response?.data?.errorCode === 'NO_PET_FOOD_FOUND') {
+            if (err?.response?.status === 429) {
+              setError(t('rate_limit_exceeded'));
+            } else if (err?.response?.status === 422 && err?.response?.data?.errorCode === 'NO_PET_FOOD_FOUND') {
               setError(t('no_pet_food_found'));
             } else {
               const errorMsg = err?.response?.data?.message || err?.response?.statusText || err?.message || 'Wystąpił błąd podczas skanowania zdjęcia.';
@@ -73,9 +75,12 @@ export default function ResultView() {
         })
         .catch(err => {
           if (!ignore) {
-            console.error(err);
-            const errorMsg = err?.response?.data?.message || err?.response?.statusText || err?.message || 'Wystąpił błąd podczas skanowania.';
-            setError(errorMsg);
+            if (err?.response?.status === 429) {
+              setError(t('rate_limit_exceeded'));
+            } else {
+              const errorMsg = err?.response?.data?.message || err?.response?.statusText || err?.message || 'Wystąpił błąd podczas skanowania.';
+              setError(errorMsg);
+            }
           }
         })
         .finally(() => {
@@ -93,13 +98,17 @@ export default function ResultView() {
   }
 
   if (error) {
+    const isRateLimit = error === t('rate_limit_exceeded');
+
     return (
       <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center justify-center p-6">
-        <div className="bg-white p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-red-100 max-w-sm w-full text-center">
-          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle size={32} />
+        <div className={`bg-white p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border max-w-sm w-full text-center ${isRateLimit ? 'border-amber-100' : 'border-red-100'}`}>
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${isRateLimit ? 'bg-amber-50 text-amber-500' : 'bg-red-50 text-red-500'}`}>
+            {isRateLimit ? <Hourglass size={32} /> : <AlertTriangle size={32} />}
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-3">{t('scan_error') || 'Błąd skanowania'}</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-3">
+            {isRateLimit ? t('rate_limit_title') : (t('scan_error') || 'Błąd skanowania')}
+          </h2>
           <p className="text-gray-500 mb-8 leading-relaxed">{error}</p>
           <button onClick={() => navigate(-1)} className="w-full px-6 py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-md active:scale-95 transition-transform flex items-center justify-center">
             <ArrowLeft size={20} className="mr-2" />

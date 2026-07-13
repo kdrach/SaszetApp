@@ -22,14 +22,16 @@ namespace SaszetApp.Api.Controllers
         private readonly IPetFoodModelMapper _mapper;
         private readonly ILogger<ScanController> _logger;
         private readonly IEncryptionService _encryptionService;
+        private readonly IRateLimitingService _rateLimitingService;
 
-        public ScanController(AppDbContext dbContext, IVlmService vlmService, IPetFoodModelMapper mapper, ILogger<ScanController> logger, IEncryptionService encryptionService)
+        public ScanController(AppDbContext dbContext, IVlmService vlmService, IPetFoodModelMapper mapper, ILogger<ScanController> logger, IEncryptionService encryptionService, IRateLimitingService rateLimitingService)
         {
             _dbContext = dbContext;
             _vlmService = vlmService;
             _mapper = mapper;
             _logger = logger;
             _encryptionService = encryptionService;
+            _rateLimitingService = rateLimitingService;
         }
 
         [HttpGet("search")]
@@ -67,6 +69,12 @@ namespace SaszetApp.Api.Controllers
             // Fallback to VLM
             try
             {
+                var allowed = await _rateLimitingService.CheckLimitAsync(userId);
+                if (!allowed)
+                {
+                    return StatusCode(429, new { message = "You have reached your scan limit." });
+                }
+
                 var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
                 if (providerEntity == null)
                 {
@@ -98,6 +106,8 @@ namespace SaszetApp.Api.Controllers
 
                 _dbContext.PetFoodItems.Add(newEntity);
                 await _dbContext.SaveChangesAsync(cancellationToken);
+
+                await _rateLimitingService.RecordUsageAsync(userId);
 
                 return Ok(_mapper.MapToModel(newEntity));
             }
@@ -132,6 +142,12 @@ namespace SaszetApp.Api.Controllers
 
             try
             {
+                var allowed = await _rateLimitingService.CheckLimitAsync(userId);
+                if (!allowed)
+                {
+                    return StatusCode(429, new { message = "You have reached your scan limit." });
+                }
+
                 var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
                 if (providerEntity == null)
                 {
@@ -158,6 +174,8 @@ namespace SaszetApp.Api.Controllers
 
                 _dbContext.PetFoodItems.Add(newEntity);
                 await _dbContext.SaveChangesAsync(cancellationToken);
+
+                await _rateLimitingService.RecordUsageAsync(userId);
 
                 return Ok(_mapper.MapToModel(newEntity));
             }

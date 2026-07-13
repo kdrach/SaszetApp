@@ -18,6 +18,7 @@ namespace SaszetApp.Api.Tests
         private readonly AppDbContext _dbContext;
         private readonly Mock<IVlmService> _mockVlmService;
         private readonly Mock<IEncryptionService> _mockEncryptionService;
+        private readonly Mock<IRateLimitingService> _mockRateLimitingService;
         private readonly IPetFoodModelMapper _mapper;
         private readonly ScanController _controller;
 
@@ -31,9 +32,11 @@ namespace SaszetApp.Api.Tests
             _mockVlmService = new Mock<IVlmService>();
             _mockEncryptionService = new Mock<IEncryptionService>();
             _mockEncryptionService.Setup(e => e.Decrypt(It.IsAny<string>())).Returns("test-key");
+            _mockRateLimitingService = new Mock<IRateLimitingService>();
+            _mockRateLimitingService.Setup(r => r.CheckLimitAsync(It.IsAny<string>())).ReturnsAsync(true);
             _mapper = new PetFoodModelMapper();
 
-            _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance, _mockEncryptionService.Object);
+            _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance, _mockEncryptionService.Object, _mockRateLimitingService.Object);
             
             var httpContext = new DefaultHttpContext();
             var identity = new System.Security.Claims.ClaimsIdentity(new[]
@@ -233,6 +236,32 @@ namespace SaszetApp.Api.Tests
             Assert.Equal("NO_PET_FOOD_FOUND", errorCodeValue);
         }
 
+        [Fact]
+        public async Task Search_LimitExceeded_Returns429TooManyRequests()
+        {
+            _mockRateLimitingService.Setup(r => r.CheckLimitAsync(It.IsAny<string>())).ReturnsAsync(false);
+            var result = await _controller.Search("9999", System.Threading.CancellationToken.None);
+            var objectResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(429, objectResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task AnalyzeImage_LimitExceeded_Returns429TooManyRequests()
+        {
+            var mockFile = new Mock<IFormFile>();
+            var content = "fake image content"u8.ToArray();
+            mockFile.Setup(f => f.Length).Returns(content.Length);
+            mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
+            var ms = new System.IO.MemoryStream(content);
+            mockFile.Setup(f => f.CopyToAsync(It.IsAny<System.IO.Stream>(), It.IsAny<System.Threading.CancellationToken>()))
+                .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
+                .Returns(Task.CompletedTask);
+
+            _mockRateLimitingService.Setup(r => r.CheckLimitAsync(It.IsAny<string>())).ReturnsAsync(false);
+            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
+            var objectResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(429, objectResult.StatusCode);
+        }
 
         public void Dispose()
         {

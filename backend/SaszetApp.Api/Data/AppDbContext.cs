@@ -10,6 +10,9 @@ namespace SaszetApp.Api.Data
 
         public DbSet<PetFoodItemEntity> PetFoodItems { get; set; }
         public DbSet<LlmProviderEntity> LlmProviders { get; set; }
+        public DbSet<SystemSettingEntity> SystemSettings { get; set; }
+        public DbSet<UserScanLimitEntity> UserScanLimits { get; set; }
+        public DbSet<UserScanUsageEntity> UserScanUsages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -41,6 +44,26 @@ namespace SaszetApp.Api.Data
                 {
                     entity.HasIndex(e => e.IsPrimary).IsUnique().HasFilter("\"IsPrimary\" = 1");
                 }
+            });
+
+            modelBuilder.Entity<SystemSettingEntity>(entity =>
+            {
+                entity.ToTable("SystemSettings");
+                entity.HasKey(e => e.Key);
+            });
+
+            modelBuilder.Entity<UserScanLimitEntity>(entity =>
+            {
+                entity.ToTable("UserScanLimits");
+                entity.HasKey(e => e.UserId);
+            });
+
+            modelBuilder.Entity<UserScanUsageEntity>(entity =>
+            {
+                entity.ToTable("UserScanUsages");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.ScannedAt);
             });
         }
     }

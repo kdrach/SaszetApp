@@ -22,5 +22,7 @@
   "scanFrontPackaging": "Scan front packaging",
   "no_pet_food_found": "No pet food found in the photo. Please try again with a clearer shot.",
   "chooseFromGallery": "Choose from gallery",
-  "scan_error": "Scan error"
+  "scan_error": "Scan error",
+  "rate_limit_exceeded": "Scan limit exceeded. Please try again later.",
+  "rate_limit_title": "Limit reached"
 }

@@ -22,5 +22,7 @@
   "scanFrontPackaging": "Skanuj front opakowania",
   "no_pet_food_found": "Nie znaleziono karmy na zdjęciu. Spróbuj jeszcze raz z wyraźniejszym kadrem.",
   "chooseFromGallery": "Wybierz z galerii",
-  "scan_error": "Błąd skanowania"
+  "scan_error": "Błąd skanowania",
+  "rate_limit_exceeded": "Przekroczono limit skanowań. Spróbuj ponownie później.",
+  "rate_limit_title": "Limit osiągnięty"
 }
