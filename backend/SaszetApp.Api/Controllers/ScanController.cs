@@ -113,7 +113,7 @@ namespace SaszetApp.Api.Controllers
             }
             catch (Exception ex)
             {
-                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
+                await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
                 _logger.LogError(ex, "Error analyzing product.");
                 return StatusCode(500, new { message = "Error analyzing product." });
             }
@@ -184,12 +184,12 @@ namespace SaszetApp.Api.Controllers
             }
             catch (InvalidOperationException ex) when (ex.Message == "NO_PET_FOOD_FOUND")
             {
-                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
+                await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
                 return StatusCode(422, new { errorCode = "NO_PET_FOOD_FOUND" });
             }
             catch (Exception ex)
             {
-                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
+                await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
                 _logger.LogError(ex, "Error analyzing image.");
                 return StatusCode(500, new { message = "Error analyzing image." });
             }

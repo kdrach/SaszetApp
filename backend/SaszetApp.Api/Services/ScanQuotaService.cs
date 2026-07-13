@@ -96,6 +96,12 @@ namespace SaszetApp.Api.Services
                 var strategy = dbContext.Database.CreateExecutionStrategy();
                 return await strategy.ExecuteAsync(async () =>
                 {
+                    var existingEntity = await dbContext.UserScanUsages.FirstOrDefaultAsync(u => u.Id == entityId, cancellationToken);
+                    if (existingEntity != null)
+                    {
+                        return existingEntity;
+                    }
+
                     dbContext.ChangeTracker.Clear();
 
                     var usageCount = await dbContext.UserScanUsages
@@ -165,9 +171,7 @@ namespace SaszetApp.Api.Services
                 var strategy = dbContext.Database.CreateExecutionStrategy();
                 await strategy.ExecuteAsync(async () =>
                 {
-                    dbContext.ChangeTracker.Clear();
-                    dbContext.UserScanUsages.Remove(entity);
-                    await dbContext.SaveChangesAsync(cancellationToken);
+                    await dbContext.UserScanUsages.Where(u => u.Id == entity.Id).ExecuteDeleteAsync(cancellationToken);
                 });
             }
             finally
