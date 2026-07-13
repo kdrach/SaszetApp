@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ namespace SaszetApp.Api.Services
 {
     public class ScanQuotaService : IScanQuotaService
     {
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> _userLocks = new();
         private readonly AppDbContext _dbContext;
         private readonly IMemoryCache _cache;
 
@@ -62,51 +64,45 @@ namespace SaszetApp.Api.Services
 
             var thresholdDate = DateTime.UtcNow.AddDays(-rollingDays);
 
-            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? transaction = null;
-            if (_dbContext.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
-            {
-                transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
-            }
-
+            var userLock = _userLocks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
+            await userLock.WaitAsync(cancellationToken);
             try
             {
-                var usageCount = await _dbContext.UserScanUsages
-                    .Where(u => u.UserId == userId && u.ScannedAt >= thresholdDate)
-                    .CountAsync(cancellationToken);
-
-                if (usageCount >= limit)
+                var strategy = _dbContext.Database.CreateExecutionStrategy();
+                return await strategy.ExecuteAsync(async () =>
                 {
-                    if (transaction != null) await transaction.CommitAsync(cancellationToken);
-                    return null;
-                }
+                    var usageCount = await _dbContext.UserScanUsages
+                        .Where(u => u.UserId == userId && u.ScannedAt >= thresholdDate)
+                        .CountAsync(cancellationToken);
 
-                var entity = new UserScanUsageEntity
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    ScannedAt = DateTime.UtcNow
-                };
-                _dbContext.UserScanUsages.Add(entity);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-                
-                if (transaction != null) await transaction.CommitAsync(cancellationToken);
+                    if (usageCount >= limit)
+                    {
+                        return null;
+                    }
 
-                return entity;
-            }
-            catch
-            {
-                if (transaction != null) await transaction.RollbackAsync(cancellationToken);
-                throw;
+                    var entity = new UserScanUsageEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = userId,
+                        ScannedAt = DateTime.UtcNow
+                    };
+                    _dbContext.UserScanUsages.Add(entity);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+
+                    return entity;
+                });
             }
             finally
             {
-                if (transaction != null) await transaction.DisposeAsync();
+                userLock.Release();
             }
         }
 
         public async Task RefundUsageAsync(UserScanUsageEntity entity, CancellationToken cancellationToken = default)
         {
             if (entity == null) return;
+
+            _dbContext.ChangeTracker.Clear();
             _dbContext.UserScanUsages.Remove(entity);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
