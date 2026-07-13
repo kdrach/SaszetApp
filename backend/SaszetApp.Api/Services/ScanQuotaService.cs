@@ -86,9 +86,13 @@ namespace SaszetApp.Api.Services
                 }
             }
 
-            await userLock.Semaphore.WaitAsync(cancellationToken);
+            bool lockAcquired = false;
             try
             {
+                await userLock.Semaphore.WaitAsync(cancellationToken);
+                lockAcquired = true;
+
+                var entityId = Guid.NewGuid();
                 var strategy = dbContext.Database.CreateExecutionStrategy();
                 return await strategy.ExecuteAsync(async () =>
                 {
@@ -105,7 +109,7 @@ namespace SaszetApp.Api.Services
 
                     var entity = new UserScanUsageEntity
                     {
-                        Id = Guid.NewGuid(),
+                        Id = entityId,
                         UserId = userId,
                         ScannedAt = DateTime.UtcNow
                     };
@@ -117,7 +121,10 @@ namespace SaszetApp.Api.Services
             }
             finally
             {
-                userLock.Semaphore.Release();
+                if (lockAcquired)
+                {
+                    userLock.Semaphore.Release();
+                }
                 lock (_userLocks)
                 {
                     userLock.RefCount--;
@@ -148,9 +155,12 @@ namespace SaszetApp.Api.Services
                 }
             }
 
-            await userLock.Semaphore.WaitAsync(cancellationToken);
+            bool lockAcquired = false;
             try
             {
+                await userLock.Semaphore.WaitAsync(cancellationToken);
+                lockAcquired = true;
+
                 using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
                 var strategy = dbContext.Database.CreateExecutionStrategy();
                 await strategy.ExecuteAsync(async () =>
@@ -162,7 +172,10 @@ namespace SaszetApp.Api.Services
             }
             finally
             {
-                userLock.Semaphore.Release();
+                if (lockAcquired)
+                {
+                    userLock.Semaphore.Release();
+                }
                 lock (_userLocks)
                 {
                     userLock.RefCount--;
