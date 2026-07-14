@@ -4,6 +4,7 @@ export interface LlmProvider {
   modelName: string;
   isPrimary: boolean;
   isActive: boolean;
+  priorityOrder: number;
 }
 
 export interface CreateProviderDto {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { providersApi } from '../api/providersApi';
 import { LlmProvider, CreateProviderDto } from '../types';
-import ProviderCard from '../components/ProviderCard';
+import ProviderSection from '../components/ProviderSection';
 import { ShieldCheck } from 'lucide-react';
 
 const SUPPORTED_PROVIDERS = ['OpenAI', 'Anthropic', 'Gemini'];
@@ -53,13 +53,38 @@ const AdminDashboardView: React.FC = () => {
     }
   };
 
-  const handleSetPrimary = async (id: string) => {
+  const handleSetPrimary = async (providerName: string, id?: string) => {
+    if (!id) {
+      setError(`Cannot set ${providerName} as primary. Please add at least one key first.`);
+      return;
+    }
     try {
       await providersApi.setPrimary(id);
       await fetchData();
       setError(null);
     } catch (err: any) {
       setError('Error setting primary: ' + err.message);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await providersApi.deleteProvider(id);
+      await fetchData();
+      setError(null);
+    } catch (err: any) {
+      setError('Error deleting provider: ' + err.message);
+    }
+  };
+
+  const handleReorder = async (providerName: string, orderedIds: string[]) => {
+    try {
+      await providersApi.reorderProviders(providerName, orderedIds);
+      await fetchData();
+      setError(null);
+    } catch (err: any) {
+      setError('Error reordering providers: ' + err.message);
+      throw err;
     }
   };
 
@@ -101,18 +126,21 @@ const AdminDashboardView: React.FC = () => {
 
       <div>
         <h3 className="text-lg font-bold text-gray-900 mb-4">Dostępni Dostawcy</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
           {SUPPORTED_PROVIDERS.map(providerName => {
-            const existing = providers.find(p => p.providerName === providerName);
+            const providerKeys = providers.filter(p => p.providerName === providerName);
+            const isGlobalPrimary = primaryProvider?.providerName === providerName;
             return (
-              <ProviderCard
+              <ProviderSection
                 key={providerName}
                 providerName={providerName}
-                existingData={existing}
-                isGlobalPrimary={primaryProvider?.id || null}
+                keys={providerKeys}
+                isGlobalPrimary={isGlobalPrimary}
                 onSave={handleSave}
                 onTest={handleTest}
+                onDelete={handleDelete}
                 onSetPrimary={handleSetPrimary}
+                onReorder={handleReorder}
               />
             );
           })}
