@@ -41,5 +41,13 @@ export const providersApi = {
   testConnection: async (id: string) => {
     const response = await api.post(`/AdminProvider/${id}/test`);
     return response.data;
+  },
+  reorderProviders: async (providerName: string, orderedIds: string[]) => {
+    const response = await api.put(`/AdminProvider/${providerName}/reorder`, orderedIds);
+    return response.data;
+  },
+  deleteProvider: async (id: string) => {
+    const response = await api.delete(`/AdminProvider/${id}`);
+    return response.data;
   }
 };
