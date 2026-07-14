@@ -24,8 +24,9 @@ namespace SaszetApp.Api.Controllers
         private readonly ILogger<ScanController> _logger;
         private readonly IEncryptionService _encryptionService;
         private readonly IScanQuotaService _scanQuotaService;
+        private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _memoryCache;
 
-        public ScanController(AppDbContext dbContext, IVlmService vlmService, IPetFoodModelMapper mapper, ILogger<ScanController> logger, IEncryptionService encryptionService, IScanQuotaService scanQuotaService)
+        public ScanController(AppDbContext dbContext, IVlmService vlmService, IPetFoodModelMapper mapper, ILogger<ScanController> logger, IEncryptionService encryptionService, IScanQuotaService scanQuotaService, Microsoft.Extensions.Caching.Memory.IMemoryCache memoryCache)
         {
             _dbContext = dbContext;
             _vlmService = vlmService;
@@ -33,6 +34,7 @@ namespace SaszetApp.Api.Controllers
             _logger = logger;
             _encryptionService = encryptionService;
             _scanQuotaService = scanQuotaService;
+            _memoryCache = memoryCache;
         }
 
         [HttpGet("search")]
@@ -58,7 +60,7 @@ namespace SaszetApp.Api.Controllers
 
             // Cache lookup
             var cachedEntity = await _dbContext.PetFoodItems
-                .Where(p => p.Language == language && (p.EanCode == query || p.ProductName.ToLower() == query.ToLower()))
+                .Where(p => p.Language == language && (p.EanCode == query || p.ProductName.ToLower() == query.ToLower()) && p.UserId == userId)
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -75,26 +77,29 @@ namespace SaszetApp.Api.Controllers
             }
 
             PetFoodItemEntity newEntity;
+            bool llmCallCompleted = false;
             try
             {
-                var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
-                if (activeCategory == null)
+                if (!_memoryCache.TryGetValue("LlmFallbackChain", out System.Collections.Generic.List<LlmProviderEntity> fallbackChain))
                 {
-                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
-                    _logger.LogWarning("LLM Provider is missing.");
-                    return StatusCode(503, new { message = "No active primary LLM provider configured." });
+                    var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
+                    if (activeCategory != null)
+                    {
+                        fallbackChain = await _dbContext.LlmProviders
+                            .AsNoTracking()
+                            .Where(p => p.ProviderName == activeCategory && p.IsActive)
+                            .OrderBy(p => p.PriorityOrder)
+                            .ToListAsync(cancellationToken);
+
+                        _memoryCache.Set("LlmFallbackChain", fallbackChain, TimeSpan.FromMinutes(5));
+                    }
                 }
 
-                var fallbackChain = await _dbContext.LlmProviders
-                    .Where(p => p.ProviderName == activeCategory && p.IsActive)
-                    .OrderBy(p => p.PriorityOrder)
-                    .ToListAsync(cancellationToken);
-
-                if (!fallbackChain.Any())
+                if (fallbackChain == null || !fallbackChain.Any())
                 {
                     await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
-                    _logger.LogWarning($"No active keys found for provider {activeCategory}.");
-                    return StatusCode(503, new { message = "No active keys for the selected LLM provider." });
+                    _logger.LogWarning("No active keys for the selected LLM provider or provider is missing.");
+                    return StatusCode(503, new { message = "No active keys or primary LLM provider configured." });
                 }
 
                 VlmResponseContract result = null;
@@ -106,6 +111,7 @@ namespace SaszetApp.Api.Controllers
                     try
                     {
                         result = await _vlmService.AnalyzeProductAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, query, language, cancellationToken);
+                        llmCallCompleted = true;
                         break;
                     }
                     catch (Exception ex)
@@ -146,7 +152,10 @@ namespace SaszetApp.Api.Controllers
             }
             catch (Exception ex)
             {
-                await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                if (!llmCallCompleted)
+                {
+                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                }
                 _logger.LogError(ex, "Error analyzing product.");
                 return StatusCode(500, new { message = "Error analyzing product." });
             }
@@ -183,26 +192,29 @@ namespace SaszetApp.Api.Controllers
             }
 
             PetFoodItemEntity newEntity;
+            bool llmCallCompleted = false;
             try
             {
-                var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
-                if (activeCategory == null)
+                if (!_memoryCache.TryGetValue("LlmFallbackChain", out System.Collections.Generic.List<LlmProviderEntity> fallbackChain))
                 {
-                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
-                    _logger.LogWarning("LLM Provider is missing.");
-                    return StatusCode(503, new { message = "No active primary LLM provider configured." });
+                    var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
+                    if (activeCategory != null)
+                    {
+                        fallbackChain = await _dbContext.LlmProviders
+                            .AsNoTracking()
+                            .Where(p => p.ProviderName == activeCategory && p.IsActive)
+                            .OrderBy(p => p.PriorityOrder)
+                            .ToListAsync(cancellationToken);
+
+                        _memoryCache.Set("LlmFallbackChain", fallbackChain, TimeSpan.FromMinutes(5));
+                    }
                 }
 
-                var fallbackChain = await _dbContext.LlmProviders
-                    .Where(p => p.ProviderName == activeCategory && p.IsActive)
-                    .OrderBy(p => p.PriorityOrder)
-                    .ToListAsync(cancellationToken);
-
-                if (!fallbackChain.Any())
+                if (fallbackChain == null || !fallbackChain.Any())
                 {
                     await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
-                    _logger.LogWarning($"No active keys found for provider {activeCategory}.");
-                    return StatusCode(503, new { message = "No active keys for the selected LLM provider." });
+                    _logger.LogWarning("No active keys for the selected LLM provider or provider is missing.");
+                    return StatusCode(503, new { message = "No active keys or primary LLM provider configured." });
                 }
 
                 VlmResponseContract result = null;
@@ -214,10 +226,12 @@ namespace SaszetApp.Api.Controllers
                     try
                     {
                         result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, image.ContentType, mode, language, cancellationToken);
+                        llmCallCompleted = true;
                         break;
                     }
                     catch (InvalidOperationException ex) when (ex.Message == "NO_PET_FOOD_FOUND")
                     {
+                        llmCallCompleted = true;
                         throw; // Don't fallback if it's a valid "not food" response
                     }
                     catch (Exception ex)
@@ -253,11 +267,18 @@ namespace SaszetApp.Api.Controllers
             }
             catch (InvalidOperationException ex) when (ex.Message == "NO_PET_FOOD_FOUND")
             {
+                if (!llmCallCompleted)
+                {
+                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                }
                 return StatusCode(422, new { errorCode = "NO_PET_FOOD_FOUND" });
             }
             catch (Exception ex)
             {
-                await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                if (!llmCallCompleted)
+                {
+                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                }
                 _logger.LogError(ex, "Error analyzing image.");
                 return StatusCode(500, new { message = "Error analyzing image." });
             }

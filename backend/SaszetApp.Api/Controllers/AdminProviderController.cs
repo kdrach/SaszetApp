@@ -21,13 +21,15 @@ namespace SaszetApp.Api.Controllers
         private readonly ILlmProviderModelMapper _mapper;
         private readonly IEncryptionService _encryptionService;
         private readonly IVlmService _vlmService;
+        private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _memoryCache;
 
-        public AdminProviderController(AppDbContext dbContext, ILlmProviderModelMapper mapper, IEncryptionService encryptionService, IVlmService vlmService)
+        public AdminProviderController(AppDbContext dbContext, ILlmProviderModelMapper mapper, IEncryptionService encryptionService, IVlmService vlmService, Microsoft.Extensions.Caching.Memory.IMemoryCache memoryCache)
         {
             _dbContext = dbContext;
             _mapper = mapper;
             _encryptionService = encryptionService;
             _vlmService = vlmService;
+            _memoryCache = memoryCache;
         }
 
         [HttpGet]
@@ -59,15 +61,15 @@ namespace SaszetApp.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateProvider([FromBody] CreateProviderDto dto)
         {
-            using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             try
             {
                 if (dto.IsPrimary)
                 {
-                    var currentPrimary = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary);
-                    if (currentPrimary != null)
+                    var currentPrimaries = await _dbContext.LlmProviders.Where(p => p.IsPrimary).ToListAsync();
+                    foreach (var p in currentPrimaries)
                     {
-                        currentPrimary.IsPrimary = false;
+                        p.IsPrimary = false;
                     }
                 }
 
@@ -94,6 +96,8 @@ namespace SaszetApp.Api.Controllers
 
                 await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
                 await transaction.CommitAsync();
+
+                _memoryCache.Remove("LlmFallbackChain");
 
                 var model = _mapper.MapToModel(entity);
                 model.EncryptedApiKey = "********";
@@ -126,10 +130,10 @@ namespace SaszetApp.Api.Controllers
 
                 if (dto.IsPrimary && !entity.IsPrimary)
                 {
-                    var currentPrimary = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary);
-                    if (currentPrimary != null)
+                    var currentPrimaries = await _dbContext.LlmProviders.Where(p => p.IsPrimary).ToListAsync();
+                    foreach (var p in currentPrimaries)
                     {
-                        currentPrimary.IsPrimary = false;
+                        p.IsPrimary = false;
                     }
                 }
 
@@ -144,6 +148,8 @@ namespace SaszetApp.Api.Controllers
 
                 await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
                 await transaction.CommitAsync();
+
+                _memoryCache.Remove("LlmFallbackChain");
 
                 var model = _mapper.MapToModel(entity);
                 model.EncryptedApiKey = "********";
@@ -165,15 +171,17 @@ namespace SaszetApp.Api.Controllers
                 var provider = await _dbContext.LlmProviders.FindAsync(id);
                 if (provider == null) return NotFound();
 
-                var currentPrimary = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary);
-                if (currentPrimary != null)
+                var currentPrimaries = await _dbContext.LlmProviders.Where(p => p.IsPrimary).ToListAsync();
+                foreach (var p in currentPrimaries)
                 {
-                    currentPrimary.IsPrimary = false;
+                    p.IsPrimary = false;
                 }
 
                 provider.IsPrimary = true;
                 await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
                 await transaction.CommitAsync();
+
+                _memoryCache.Remove("LlmFallbackChain");
 
                 return Ok();
             }
@@ -211,9 +219,17 @@ namespace SaszetApp.Api.Controllers
                 var entity = await _dbContext.LlmProviders.FindAsync(id);
                 if (entity == null) return NotFound();
 
+                if (entity.IsPrimary)
+                {
+                    return BadRequest("Cannot delete the primary provider.");
+                }
+
                 _dbContext.LlmProviders.Remove(entity);
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                _memoryCache.Remove("LlmFallbackChain");
+
                 return Ok();
             }
             catch
@@ -226,6 +242,11 @@ namespace SaszetApp.Api.Controllers
         [HttpPut("{providerName}/reorder")]
         public async Task<IActionResult> ReorderProviders(string providerName, [FromBody] System.Collections.Generic.List<Guid> orderedIds)
         {
+            if (orderedIds != null)
+            {
+                orderedIds = orderedIds.Distinct().ToList();
+            }
+
             using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             try
             {
@@ -233,7 +254,7 @@ namespace SaszetApp.Api.Controllers
                     .Where(p => p.ProviderName == providerName)
                     .ToListAsync();
 
-                if (entities.Count != orderedIds.Count)
+                if (orderedIds == null || entities.Count != orderedIds.Count)
                 {
                     return BadRequest(new { message = "The number of IDs provided does not match the number of keys for this provider." });
                 }
@@ -250,6 +271,8 @@ namespace SaszetApp.Api.Controllers
 
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                _memoryCache.Remove("LlmFallbackChain");
 
                 return Ok();
             }
