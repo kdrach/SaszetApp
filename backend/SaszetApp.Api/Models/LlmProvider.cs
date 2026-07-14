@@ -10,5 +10,6 @@ namespace SaszetApp.Api.Models
         public string EncryptedApiKey { get; set; } = string.Empty;
         public bool IsPrimary { get; set; }
         public bool IsActive { get; set; }
+        public int PriorityOrder { get; set; }
     }
 }

@@ -71,34 +71,27 @@ namespace SaszetApp.Api.Controllers
                     }
                 }
 
-                var entity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.ProviderName == dto.ProviderName);
-                if (entity != null)
+                if (dto.ApiKey == "KEEP_EXISTING")
                 {
-                    entity.ModelName = dto.ModelName;
-                    if (dto.ApiKey != "KEEP_EXISTING")
-                    {
-                        entity.EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey);
-                    }
-                    entity.IsPrimary = dto.IsPrimary;
-                    entity.IsActive = dto.IsActive;
+                    return BadRequest("Cannot use KEEP_EXISTING for a new provider.");
                 }
-                else
+
+                var maxPriority = await _dbContext.LlmProviders
+                    .Where(p => p.ProviderName == dto.ProviderName)
+                    .MaxAsync(p => (int?)p.PriorityOrder) ?? 0;
+
+                var entity = new LlmProviderEntity
                 {
-                    if (dto.ApiKey == "KEEP_EXISTING")
-                    {
-                        return BadRequest("Cannot use KEEP_EXISTING for a new provider.");
-                    }
-                    entity = new LlmProviderEntity
-                    {
-                        Id = Guid.NewGuid(),
-                        ProviderName = dto.ProviderName,
-                        ModelName = dto.ModelName,
-                        EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey),
-                        IsPrimary = dto.IsPrimary,
-                        IsActive = dto.IsActive
-                    };
-                    _dbContext.LlmProviders.Add(entity);
-                }
+                    Id = Guid.NewGuid(),
+                    ProviderName = dto.ProviderName,
+                    ModelName = dto.ModelName,
+                    EncryptedApiKey = _encryptionService.Encrypt(dto.ApiKey),
+                    IsPrimary = dto.IsPrimary,
+                    IsActive = dto.IsActive,
+                    PriorityOrder = maxPriority + 1
+                };
+                _dbContext.LlmProviders.Add(entity);
+
                 await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
                 await transaction.CommitAsync();
 
@@ -206,6 +199,64 @@ namespace SaszetApp.Api.Controllers
             catch (System.Exception)
             {
                 return BadRequest(new { message = "Connection test failed." });
+            }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteProvider(Guid id)
+        {
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            try
+            {
+                var entity = await _dbContext.LlmProviders.FindAsync(id);
+                if (entity == null) return NotFound();
+
+                _dbContext.LlmProviders.Remove(entity);
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return Ok();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        [HttpPut("{providerName}/reorder")]
+        public async Task<IActionResult> ReorderProviders(string providerName, [FromBody] System.Collections.Generic.List<Guid> orderedIds)
+        {
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            try
+            {
+                var entities = await _dbContext.LlmProviders
+                    .Where(p => p.ProviderName == providerName)
+                    .ToListAsync();
+
+                if (entities.Count != orderedIds.Count)
+                {
+                    return BadRequest(new { message = "The number of IDs provided does not match the number of keys for this provider." });
+                }
+
+                for (int i = 0; i < orderedIds.Count; i++)
+                {
+                    var entity = entities.FirstOrDefault(e => e.Id == orderedIds[i]);
+                    if (entity == null)
+                    {
+                        return BadRequest(new { message = $"Provider key with ID {orderedIds[i]} not found for provider {providerName}." });
+                    }
+                    entity.PriorityOrder = i + 1;
+                }
+
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
             }
         }
     }

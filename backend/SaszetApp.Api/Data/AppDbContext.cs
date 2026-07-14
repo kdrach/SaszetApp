@@ -35,7 +35,13 @@ namespace SaszetApp.Api.Data
             {
                 entity.ToTable("LlmProviders");
                 entity.HasKey(e => e.Id);
-                entity.HasIndex(e => e.ProviderName).IsUnique();
+                // ProviderName is no longer unique, as we can have multiple keys per provider
+                entity.HasIndex(e => e.ProviderName);
+                
+                // If we still want exactly one global Primary route, we can keep the IsPrimary index, 
+                // but since the fallback plan uses PriorityOrder per provider, we might not need the IsPrimary unique index at all. 
+                // Wait, PRD says "Exactly ONE provider MUST be marked as IsPrimary = true at any given time."
+                // So the global IsPrimary index is still valid. The globally active provider category is selected by IsPrimary = true.
                 if (Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
                 {
                     entity.HasIndex(e => e.IsPrimary).IsUnique().HasFilter("\"IsPrimary\" = true");
