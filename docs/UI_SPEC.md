@@ -51,11 +51,11 @@ Search Bar: A prominent text input field with a search icon. Localized Placehold
 
 Grouped List (Recent Scans): A native-style grouped list (ul > li with separators) showing recently scanned products from local storage.
 
-Bottom Navigation Bar: Fixed at the bottom with glassmorphism blur. Contains icons for Home (Left), a prominent elevated Scan Button (Center), and Profile/Settings (Right).
+Bottom Navigation Bar: Fixed at the bottom with glassmorphism blur. Contains icons for Home (Left), a Barcode Scan button (Center-Left), an Ingredients Photo Scan button (Center-Right), and Profile/Settings (Right). The Ingredients Scan button triggers a native OS camera launch (`<input type="file" capture="environment">`).
 
-2.2. Barcode/Label Scanner Screen (/scan)
+2.2. Barcode Scanner Screen (/scan)
 
-Purpose: Camera viewport for capturing EAN codes or ingredients.
+Purpose: Camera viewport for capturing EAN codes.
 Layout Elements:
 
 Immersive View: 100% full-screen camera view (black background). Bottom navigation is hidden.
@@ -67,10 +67,6 @@ Overlay: A clear "cutout" box guiding the user where to place the barcode/label.
 Instruction Text (Localized): Floating text badge.
 
 State 1 (EAN): "Umieść kod w ramce" / "Place barcode inside the frame"
-
-State 2 (Label): "Zrób wyraźne zdjęcie składu" / "Take a clear photo of the ingredients"
-
-Bottom Sheet Controls: Toggle between EAN and Photo mode. In Photo mode, a large circular native-style shutter button.
 
 2.3. Analysis Results Screen (/product/{id})
 
