@@ -15,5 +15,7 @@ namespace SaszetApp.Api.Data
         public bool IsPrimary { get; set; }
         
         public bool IsActive { get; set; }
+
+        public int PriorityOrder { get; set; }
     }
 }

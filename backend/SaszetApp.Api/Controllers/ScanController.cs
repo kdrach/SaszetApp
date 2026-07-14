@@ -9,6 +9,7 @@ using SaszetApp.Api.Data;
 using SaszetApp.Api.Models;
 using SaszetApp.Api.Services;
 using SaszetApp.Api.Services.Mappers;
+using SaszetApp.Api.DTOs;
 
 namespace SaszetApp.Api.Controllers
 {
@@ -76,16 +77,48 @@ namespace SaszetApp.Api.Controllers
             PetFoodItemEntity newEntity;
             try
             {
-                var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
-                if (providerEntity == null)
+                var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
+                if (activeCategory == null)
                 {
                     await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
                     _logger.LogWarning("LLM Provider is missing.");
                     return StatusCode(503, new { message = "No active primary LLM provider configured." });
                 }
-                var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
 
-                var result = await _vlmService.AnalyzeProductAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, query, language, cancellationToken);
+                var fallbackChain = await _dbContext.LlmProviders
+                    .Where(p => p.ProviderName == activeCategory && p.IsActive)
+                    .OrderBy(p => p.PriorityOrder)
+                    .ToListAsync(cancellationToken);
+
+                if (!fallbackChain.Any())
+                {
+                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                    _logger.LogWarning($"No active keys found for provider {activeCategory}.");
+                    return StatusCode(503, new { message = "No active keys for the selected LLM provider." });
+                }
+
+                VlmResponseContract result = null;
+                Exception lastException = null;
+
+                foreach (var providerEntity in fallbackChain)
+                {
+                    var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
+                    try
+                    {
+                        result = await _vlmService.AnalyzeProductAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, query, language, cancellationToken);
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} (Model: {providerEntity.ModelName}) failed. Trying next backup...");
+                    }
+                }
+
+                if (result == null)
+                {
+                    throw new Exception("All LLM providers in the fallback chain failed.", lastException);
+                }
 
                 newEntity = new PetFoodItemEntity
                 {
@@ -152,16 +185,52 @@ namespace SaszetApp.Api.Controllers
             PetFoodItemEntity newEntity;
             try
             {
-                var providerEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.IsPrimary && p.IsActive, cancellationToken);
-                if (providerEntity == null)
+                var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
+                if (activeCategory == null)
                 {
                     await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
                     _logger.LogWarning("LLM Provider is missing.");
                     return StatusCode(503, new { message = "No active primary LLM provider configured." });
                 }
-                var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
 
-                var result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, image.ContentType, mode, language, cancellationToken);
+                var fallbackChain = await _dbContext.LlmProviders
+                    .Where(p => p.ProviderName == activeCategory && p.IsActive)
+                    .OrderBy(p => p.PriorityOrder)
+                    .ToListAsync(cancellationToken);
+
+                if (!fallbackChain.Any())
+                {
+                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                    _logger.LogWarning($"No active keys found for provider {activeCategory}.");
+                    return StatusCode(503, new { message = "No active keys for the selected LLM provider." });
+                }
+
+                VlmResponseContract result = null;
+                Exception lastException = null;
+
+                foreach (var providerEntity in fallbackChain)
+                {
+                    var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
+                    try
+                    {
+                        result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, image.ContentType, mode, language, cancellationToken);
+                        break;
+                    }
+                    catch (InvalidOperationException ex) when (ex.Message == "NO_PET_FOOD_FOUND")
+                    {
+                        throw; // Don't fallback if it's a valid "not food" response
+                    }
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} (Model: {providerEntity.ModelName}) failed for image scan. Trying next backup...");
+                    }
+                }
+
+                if (result == null)
+                {
+                    throw new Exception("All LLM providers in the fallback chain failed.", lastException);
+                }
 
                 newEntity = new PetFoodItemEntity
                 {
