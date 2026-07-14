@@ -48,17 +48,9 @@ export interface UserLimitDto {
 }
 
 export const getAllUsersLimits = async (token: string): Promise<UserLimitDto[]> => {
-  // Mock Data for UX validation before backend implementation
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve([
-        { userId: 'user_123_abc', usage: 3, maxScans: 5, lastReset: new Date().toISOString() },
-        { userId: 'user_456_def', usage: 5, maxScans: 5, lastReset: new Date().toISOString() },
-        { userId: 'user_789_ghi', usage: 1, maxScans: 10, lastReset: new Date().toISOString() },
-        { userId: 'user_999_xyz', usage: 12, maxScans: 15, lastReset: new Date().toISOString() },
-        { userId: 'user_000_foo', usage: 0, maxScans: 5, lastReset: new Date().toISOString() },
-      ]);
-    }, 500);
+  const response = await axios.get(`${API_BASE_URL}/AdminSettings/users`, {
+    headers: { Authorization: `Bearer ${token}` }
   });
+  return response.data;
 };
 

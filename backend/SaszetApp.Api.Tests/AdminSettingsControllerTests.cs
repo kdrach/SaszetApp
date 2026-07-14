@@ -72,6 +72,35 @@ namespace SaszetApp.Api.Tests
             Assert.Equal(20, entity.MaxScans);
         }
 
+        [Fact]
+        public async Task GetAllUsersLimits_ReturnsExpectedData()
+        {
+            _dbContext.SystemSettings.Add(new SystemSettingEntity { Key = "GlobalScanLimit", Value = "5" });
+            _dbContext.SystemSettings.Add(new SystemSettingEntity { Key = "ScanLimitRollingDays", Value = "7" });
+            
+            _dbContext.UserScanLimits.Add(new UserScanLimitEntity { UserId = "user1", MaxScans = 10 });
+            _dbContext.UserScanUsages.Add(new UserScanUsageEntity { Id = Guid.NewGuid(), UserId = "user1", ScannedAt = DateTime.UtcNow });
+            _dbContext.UserScanUsages.Add(new UserScanUsageEntity { Id = Guid.NewGuid(), UserId = "user2", ScannedAt = DateTime.UtcNow });
+            
+            await _dbContext.SaveChangesAsync();
+
+            var result = await _controller.GetAllUsersLimits();
+            
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var items = Assert.IsAssignableFrom<System.Collections.Generic.IEnumerable<AdminSettingsController.UserLimitDto>>(okResult.Value);
+            var list = System.Linq.Enumerable.ToList(items);
+            
+            Assert.Equal(2, list.Count);
+            
+            var u1 = System.Linq.Enumerable.Single(list, x => x.UserId == "user1");
+            Assert.Equal(10, u1.MaxScans);
+            Assert.Equal(1, u1.Usage);
+            
+            var u2 = System.Linq.Enumerable.Single(list, x => x.UserId == "user2");
+            Assert.Equal(5, u2.MaxScans);
+            Assert.Equal(1, u2.Usage);
+        }
+
         public void Dispose()
         {
             _dbContext.Database.EnsureDeleted();

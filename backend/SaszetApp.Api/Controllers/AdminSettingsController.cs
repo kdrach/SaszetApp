@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -69,6 +70,8 @@ namespace SaszetApp.Api.Controllers
         {
             public string UserId { get; set; } = string.Empty;
             public int MaxScans { get; set; }
+            public int Usage { get; set; }
+            public string LastReset { get; set; } = string.Empty;
         }
 
         [HttpGet("users/{userId}")]
@@ -97,6 +100,47 @@ namespace SaszetApp.Api.Controllers
             
             await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
             return Ok(dto);
+        }
+
+        [HttpGet("users")]
+        public async Task<IActionResult> GetAllUsersLimits()
+        {
+            var globalLimitEntity = await _dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == "GlobalScanLimit");
+            var globalLimit = globalLimitEntity != null && int.TryParse(globalLimitEntity.Value, out var l) ? l : 5;
+
+            var rollingDaysEntity = await _dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == "ScanLimitRollingDays");
+            var rollingDays = rollingDaysEntity != null && int.TryParse(rollingDaysEntity.Value, out var d) ? d : 7;
+
+            var windowStart = System.DateTime.UtcNow.AddDays(-rollingDays);
+
+            var explicitLimits = await _dbContext.UserScanLimits.ToListAsync();
+            var usages = await _dbContext.UserScanUsages
+                .Where(u => u.ScannedAt >= windowStart)
+                .GroupBy(u => u.UserId)
+                .Select(g => new { UserId = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            var allUserIds = explicitLimits.Select(l => l.UserId)
+                .Union(usages.Select(u => u.UserId))
+                .Distinct();
+
+            var result = new System.Collections.Generic.List<UserLimitDto>();
+            foreach (var userId in allUserIds)
+            {
+                var explicitLimit = explicitLimits.FirstOrDefault(l => l.UserId == userId);
+                var maxScans = explicitLimit != null ? explicitLimit.MaxScans : globalLimit;
+                var usageCount = usages.FirstOrDefault(u => u.UserId == userId)?.Count ?? 0;
+
+                result.Add(new UserLimitDto
+                {
+                    UserId = userId,
+                    MaxScans = maxScans,
+                    Usage = usageCount,
+                    LastReset = windowStart.ToString("o")
+                });
+            }
+
+            return Ok(result);
         }
     }
 }
