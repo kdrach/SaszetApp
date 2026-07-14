@@ -47,10 +47,16 @@ export interface UserLimitDto {
   lastReset: string;
 }
 
-export const getAllUsersLimits = async (token: string): Promise<UserLimitDto[]> => {
-  const response = await axios.get(`${API_BASE_URL}/AdminSettings/users`, {
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export const getAllUsersLimits = async (token: string, page: number = 1, pageSize: number = 50): Promise<PagedResult<UserLimitDto>> => {
+  const response = await axios.get(`${API_BASE_URL}/AdminSettings/users?page=${page}&pageSize=${pageSize}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
   return response.data;
 };
-

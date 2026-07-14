@@ -36,8 +36,8 @@ const RateLimitsView: React.FC = () => {
       setIsLoadingUsers(true);
       try {
         const token = keycloak.token || localStorage.getItem('access_token') || '';
-        const data = await adminSettingsApi.getAllUsersLimits(token);
-        setUsers(data);
+        const data = await adminSettingsApi.getAllUsersLimits(token, 1, 50);
+        setUsers(data.items);
       } catch (err) {
         console.error('Failed to load users limits', err);
       } finally {
