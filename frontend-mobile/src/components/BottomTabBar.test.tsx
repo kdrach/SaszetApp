@@ -1,9 +1,28 @@
-import { render } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import BottomTabBar from './BottomTabBar';
+import { compressImage } from '../utils/imageUtils';
+
+const mockedNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockedNavigate,
+  };
+});
+
+vi.mock('../utils/imageUtils', () => ({
+  compressImage: vi.fn().mockResolvedValue(new Blob(['dummy content'], { type: 'image/jpeg' }))
+}));
 
 describe('BottomTabBar', () => {
-  it('renders navigation links on home route', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders navigation links and scan buttons on home route', () => {
     const { container } = render(
       <MemoryRouter initialEntries={['/']}>
         <BottomTabBar />
@@ -11,10 +30,18 @@ describe('BottomTabBar', () => {
     );
     
     const links = container.querySelectorAll('a');
-    expect(links).toHaveLength(3);
+    expect(links).toHaveLength(3); // Home, EAN Scan, Profile
     expect(links[0].getAttribute('href')).toBe('/');
     expect(links[1].getAttribute('href')).toBe('/scan');
     expect(links[2].getAttribute('href')).toBe('/profile');
+    
+    // There should be a hidden file input
+    const fileInput = document.querySelector('input[type="file"]');
+    expect(fileInput).toBeInTheDocument();
+    
+    // There should be a button to trigger the camera (ingredients scan)
+    const cameraButton = container.querySelector('button[aria-label="Scan Ingredients"]');
+    expect(cameraButton).toBeInTheDocument();
   });
 
   it('does not render anything on /scan route', () => {
@@ -25,5 +52,50 @@ describe('BottomTabBar', () => {
     );
     
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('triggers file input click when camera button is clicked', () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <BottomTabBar />
+      </MemoryRouter>
+    );
+    
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const clickSpy = vi.spyOn(fileInput, 'click');
+    
+    const cameraButton = container.querySelector('button[aria-label="Scan Ingredients"]');
+    if (cameraButton) {
+      fireEvent.click(cameraButton);
+    }
+    
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  it('compresses image and navigates to photo view on file change', async () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <BottomTabBar />
+      </MemoryRouter>
+    );
+    
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const testFile = new File(['dummy'], 'test.png', { type: 'image/png' });
+    
+    fireEvent.change(fileInput, { target: { files: [testFile] } });
+    
+    // Assert e.target.value was cleared (although testing synthetic events this way is tricky,
+    // the value property is what's accessed in component)
+    expect(fileInput.value).toBe('');
+    
+    await waitFor(() => {
+      expect(compressImage).toHaveBeenCalledWith(testFile);
+      expect(mockedNavigate).toHaveBeenCalledWith('/product/photo', {
+        state: { 
+          imageBlob: expect.any(Blob), 
+          scanMode: 'Ingredients' 
+        }
+      });
+    });
   });
 });

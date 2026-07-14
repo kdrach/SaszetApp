@@ -21,16 +21,6 @@ vi.mock('react-i18next', () => ({
 describe('ScannerView', () => {
   it('renders correctly', async () => {
     render(<BrowserRouter><ScannerView /></BrowserRouter>);
-    expect(await screen.findByText('modeEan')).toBeInTheDocument();
-  });
-  
-  it('changes mode to photo and shows capture buttons and file input', async () => {
-    render(<BrowserRouter><ScannerView /></BrowserRouter>);
-    const photoModeBtn = await screen.findByText('modePhoto');
-    fireEvent.click(photoModeBtn);
-    expect(await screen.findByText('takePhoto')).toBeInTheDocument();
-    expect(await screen.findByText('scanIngredients')).toBeInTheDocument();
-    expect(await screen.findByText('scanFrontPackaging')).toBeInTheDocument();
-    expect(document.querySelector('input[type="file"]')).toBeInTheDocument();
+    expect(await screen.findByText('placeBarcode')).toBeInTheDocument();
   });
 });

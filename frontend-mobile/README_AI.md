@@ -24,6 +24,10 @@
   - Implemented Photo Mode UI in `ScannerView` allowing file capture for Ingredients or General scanning.
   - Updated `ResultView` and `scanApi.ts` to support multipart `FormData` uploads to the backend.
   - Replaced the live-feed camera with native `<input capture="environment">` fallback to increase capture quality (Issue #102), scaling images to configurable resolutions.
+- **Scanner UI Simplification (Epic #120)**:
+  - Removed custom "Photo Mode" bottom sheet from `ScannerView`.
+  - Added dedicated "Ingredients Scan" button to `BottomTabBar` which directly launches native OS camera via hidden file input.
+  - Simplified `ScannerView` to solely handle EAN barcode scanning.
 
 - **Bug Fixes (Camera)**:
   - Fixed concurrent camera initialization race conditions caused by React StrictMode and prevented double UI error overlays on denied permissions in ScannerView.

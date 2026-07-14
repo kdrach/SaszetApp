@@ -2,19 +2,15 @@ import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Flashlight, Camera, Barcode, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Flashlight } from 'lucide-react';
 import clsx from 'clsx';
-import { compressImage } from '../utils/imageUtils';
 
 export default function ScannerView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'ean' | 'photo'>('ean');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const stopPromiseRef = useRef<Promise<void> | null>(null);
   const startPromiseRef = useRef<Promise<void> | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [photoScanMode, setPhotoScanMode] = useState<'Ingredients' | 'General'>('Ingredients');
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const [torchOn, setTorchOn] = useState(false);
 
@@ -40,31 +36,23 @@ export default function ScannerView() {
             html5QrCodeRef.current = localHtml5QrCode;
             isStarting = true;
             
-            if (mode === 'ean') {
-              await localHtml5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
-                (decodedText) => {
-                  if (localHtml5QrCode.isScanning && !stopPromiseRef.current) {
-                    stopPromiseRef.current = localHtml5QrCode.stop().then(() => {
-                      navigate(`/product/${encodeURIComponent(decodedText)}`);
-                    }).catch((err) => {
-                      console.error(err);
-                    }).finally(() => {
-                      stopPromiseRef.current = null;
-                    });
-                  }
-                },
-                () => {}
-              );
-            } else {
-              await localHtml5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, aspectRatio: 1.0 },
-                () => {},
-                () => {}
-              );
-            }
+            await localHtml5QrCode.start(
+              { facingMode: "environment" },
+              { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
+              (decodedText) => {
+                if (localHtml5QrCode.isScanning && !stopPromiseRef.current) {
+                  stopPromiseRef.current = localHtml5QrCode.stop().then(() => {
+                    navigate(`/product/${encodeURIComponent(decodedText)}`);
+                  }).catch((err) => {
+                    console.error(err);
+                  }).finally(() => {
+                    stopPromiseRef.current = null;
+                  });
+                }
+              },
+              () => {}
+            );
+            
             isStarting = false;
 
             if (!isMounted) {
@@ -103,7 +91,7 @@ export default function ScannerView() {
         });
       }
     };
-  }, [mode, navigate]);
+  }, [navigate]);
 
   const toggleFlashlight = async () => {
     if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
@@ -112,27 +100,6 @@ export default function ScannerView() {
         setTorchOn(!torchOn);
       } catch (err) {
         console.error("Torch not supported", err);
-      }
-    }
-  };
-
-  const triggerFileInput = (pmode: 'Ingredients' | 'General') => {
-    setPhotoScanMode(pmode);
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const compressedBlob = await compressImage(file);
-        navigate('/product/photo', { state: { imageBlob: compressedBlob, scanMode: photoScanMode } });
-      } catch (error) {
-        console.error('Failed to compress image:', error);
       }
     }
   };
@@ -157,88 +124,20 @@ export default function ScannerView() {
         <div id="reader" className="w-full h-full object-cover"></div>
         
         {/* Overlay Cutout for EAN */}
-        {mode === 'ean' && (
-          <div className="absolute inset-0 pointer-events-none border-[100vh] border-black/50" style={{ borderWidth: 'calc(50vh - 75px) calc(50vw - 125px)' }}>
-            <div className="w-full h-full border-2 border-[var(--color-primary)] rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] box-content relative">
-              <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-[var(--color-primary)] -mt-1 -ml-1"></div>
-              <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-[var(--color-primary)] -mt-1 -mr-1"></div>
-              <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-[var(--color-primary)] -mb-1 -ml-1"></div>
-              <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-[var(--color-primary)] -mb-1 -mr-1"></div>
-            </div>
+        <div className="absolute inset-0 pointer-events-none border-[100vh] border-black/50" style={{ borderWidth: 'calc(50vh - 75px) calc(50vw - 125px)' }}>
+          <div className="w-full h-full border-2 border-[var(--color-primary)] rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] box-content relative">
+            <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-[var(--color-primary)] -mt-1 -ml-1"></div>
+            <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-[var(--color-primary)] -mt-1 -mr-1"></div>
+            <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-[var(--color-primary)] -mb-1 -ml-1"></div>
+            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-[var(--color-primary)] -mb-1 -mr-1"></div>
           </div>
-        )}
+        </div>
 
         {hasPermission !== false && (
           <div className="absolute top-1/4 left-0 w-full text-center pointer-events-none mt-20 z-20">
             <span className="bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-medium tracking-wide shadow-lg">
-              {mode === 'ean' ? t('placeBarcode') : t('takePhoto')}
+              {t('placeBarcode')}
             </span>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-black/80 backdrop-blur-xl rounded-t-[2.5rem] p-8 pb-12 shadow-[0_-10px_40px_rgba(0,0,0,0.3)]">
-        <div className="flex justify-center space-x-6 mb-8">
-          <button 
-            onClick={() => setMode('ean')}
-            className={clsx("flex flex-col items-center space-y-2 transition-colors", mode === 'ean' ? "text-[var(--color-primary)]" : "text-gray-400")}
-          >
-            <div className={clsx("p-4 rounded-full transition-colors", mode === 'ean' ? "bg-[var(--color-primary)]/20" : "bg-gray-800")}>
-              <Barcode size={28} />
-            </div>
-            <span className="text-xs font-semibold uppercase tracking-wider">{t('modeEan')}</span>
-          </button>
-          
-          <button 
-            onClick={() => setMode('photo')}
-            className={clsx("flex flex-col items-center space-y-2 transition-colors", mode === 'photo' ? "text-[var(--color-primary)]" : "text-gray-400")}
-          >
-            <div className={clsx("p-4 rounded-full transition-colors", mode === 'photo' ? "bg-[var(--color-primary)]/20" : "bg-gray-800")}>
-              <Camera size={28} />
-            </div>
-            <span className="text-xs font-semibold uppercase tracking-wider">{t('modePhoto')}</span>
-          </button>
-        </div>
-
-        {mode === 'photo' && (
-          <div className="flex flex-col space-y-4 px-6 w-full max-w-sm mx-auto">
-            <div className="flex space-x-3">
-              <button 
-                onClick={() => triggerFileInput('Ingredients')}
-                className="flex-1 bg-[var(--color-primary)] text-white py-4 rounded-xl font-semibold shadow-lg active:scale-95 transition-transform"
-              >
-                {t('scanIngredients')}
-              </button>
-              <button 
-                onClick={() => triggerFileInput('Ingredients')}
-                className="bg-[var(--color-primary)]/20 text-[var(--color-primary)] p-4 rounded-xl shadow-lg active:scale-95 transition-transform flex items-center justify-center hidden"
-              >
-                <ImageIcon size={24} />
-              </button>
-            </div>
-            
-            <div className="flex space-x-3">
-              <button 
-                onClick={() => triggerFileInput('General')}
-                className="flex-1 bg-gray-800 text-white py-4 rounded-xl font-semibold shadow-lg border border-gray-700 active:scale-95 transition-transform"
-              >
-                {t('scanFrontPackaging')}
-              </button>
-              <button 
-                onClick={() => triggerFileInput('General')}
-                className="bg-gray-800 text-white p-4 rounded-xl shadow-lg border border-gray-700 active:scale-95 transition-transform flex items-center justify-center hidden"
-              >
-                <ImageIcon size={24} />
-              </button>
-            </div>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-            />
           </div>
         )}
       </div>
