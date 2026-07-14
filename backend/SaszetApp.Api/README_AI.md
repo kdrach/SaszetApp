@@ -31,3 +31,5 @@ This is a standard .NET 10.0 ASP.NET Core Web API project using Controllers and 
   - Updated `TestConnection` logic to explicitly query specific models (e.g., `/models/{ModelName}`) ensuring that entering a random model name results in a connection test failure.
 
   - Fixed Gemini API URL generation bug by stripping 'models/' prefix appropriately for both Text and Image payloads.
+- **Security Hotfix (Token Burn)**:
+  - Ensured `NO_PET_FOOD_FOUND` errors intentionally skip the `RefundUsageAsync` process. This burns the scan quota for invalid/malicious image uploads, preventing wallet exhaustion.

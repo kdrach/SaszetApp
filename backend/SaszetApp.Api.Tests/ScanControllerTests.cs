@@ -198,7 +198,7 @@ namespace SaszetApp.Api.Tests
         }
 
         [Fact]
-        public async Task AnalyzeImage_VlmThrowsNoPetFoodFound_Returns422UnprocessableEntity()
+        public async Task AnalyzeImage_VlmThrowsNoPetFoodFound_Returns422_And_ConsumesUsage()
         {
             // Arrange
             var provider = new LlmProviderEntity { Id = Guid.NewGuid(), ProviderName = "OpenAI", ModelName = "gpt-4-vision", IsPrimary = true, IsActive = true, EncryptedApiKey = "enc-key" };
@@ -234,6 +234,8 @@ namespace SaszetApp.Api.Tests
             Assert.NotNull(propertyInfo);
             var errorCodeValue = propertyInfo.GetValue(objectResult.Value);
             Assert.Equal("NO_PET_FOOD_FOUND", errorCodeValue);
+
+            _mockScanQuotaService.Verify(s => s.RefundUsageAsync(It.IsAny<UserScanUsageEntity>(), It.IsAny<System.Threading.CancellationToken>()), Times.Never);
         }
 
         [Fact]

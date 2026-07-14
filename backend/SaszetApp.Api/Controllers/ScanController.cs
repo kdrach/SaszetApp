@@ -184,7 +184,6 @@ namespace SaszetApp.Api.Controllers
             }
             catch (InvalidOperationException ex) when (ex.Message == "NO_PET_FOOD_FOUND")
             {
-                await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
                 return StatusCode(422, new { errorCode = "NO_PET_FOOD_FOUND" });
             }
             catch (Exception ex)
