@@ -1,7 +1,8 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import BottomTabBar from './BottomTabBar';
+import { compressImage } from '../utils/imageUtils';
 
 const mockedNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -51,5 +52,50 @@ describe('BottomTabBar', () => {
     );
     
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('triggers file input click when camera button is clicked', () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <BottomTabBar />
+      </MemoryRouter>
+    );
+    
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const clickSpy = vi.spyOn(fileInput, 'click');
+    
+    const cameraButton = container.querySelector('button[aria-label="Scan Ingredients"]');
+    if (cameraButton) {
+      fireEvent.click(cameraButton);
+    }
+    
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  it('compresses image and navigates to photo view on file change', async () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <BottomTabBar />
+      </MemoryRouter>
+    );
+    
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const testFile = new File(['dummy'], 'test.png', { type: 'image/png' });
+    
+    fireEvent.change(fileInput, { target: { files: [testFile] } });
+    
+    // Assert e.target.value was cleared (although testing synthetic events this way is tricky,
+    // the value property is what's accessed in component)
+    expect(fileInput.value).toBe('');
+    
+    await waitFor(() => {
+      expect(compressImage).toHaveBeenCalledWith(testFile);
+      expect(mockedNavigate).toHaveBeenCalledWith('/product/photo', {
+        state: { 
+          imageBlob: expect.any(Blob), 
+          scanMode: 'Ingredients' 
+        }
+      });
+    });
   });
 });

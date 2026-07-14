@@ -22,6 +22,8 @@ export default function BottomTabBar() {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Clear the input so the same file can be selected again if needed
+    e.target.value = '';
     if (file) {
       try {
         const compressedBlob = await compressImage(file);
@@ -30,8 +32,6 @@ export default function BottomTabBar() {
         console.error('Failed to compress image:', error);
       }
     }
-    // Clear the input so the same file can be selected again if needed
-    e.target.value = '';
   };
 
   return (
