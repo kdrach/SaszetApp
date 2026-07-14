@@ -38,6 +38,7 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 
 builder.Services.AddScoped<SaszetApp.Api.Services.Mappers.IPetFoodModelMapper, SaszetApp.Api.Services.Mappers.PetFoodModelMapper>();
 builder.Services.AddScoped<SaszetApp.Api.Services.Mappers.ILlmProviderModelMapper, SaszetApp.Api.Services.Mappers.LlmProviderModelMapper>();
+builder.Services.AddScoped<SaszetApp.Api.Mappers.IAdminSettingsModelMapper, SaszetApp.Api.Mappers.AdminSettingsModelMapper>();
 builder.Services.AddSingleton<SaszetApp.Api.Services.IEncryptionService, SaszetApp.Api.Services.EncryptionService>();
 builder.Services.AddScoped<SaszetApp.Api.Services.IVlmService, SaszetApp.Api.Services.VlmService>();
 builder.Services.AddScoped<SaszetApp.Api.Services.IScanQuotaService, SaszetApp.Api.Services.ScanQuotaService>();
