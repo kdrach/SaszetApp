@@ -263,6 +263,56 @@ namespace SaszetApp.Api.Tests
             Assert.Equal(429, objectResult.StatusCode);
         }
 
+        [Fact]
+        public async Task AnalyzeImage_MalformedImage_RefundsQuota_AndReturnsBadRequest()
+        {
+            var mockFile = new Mock<IFormFile>();
+            var content = System.Text.Encoding.UTF8.GetBytes("not a real image");
+            mockFile.Setup(f => f.Length).Returns(content.Length);
+            mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
+            
+            mockFile.Setup(f => f.OpenReadStream()).Returns(() => new System.IO.MemoryStream(content));
+
+            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
+            
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Invalid image file.", badRequestResult.Value);
+
+            _mockScanQuotaService.Verify(s => s.RefundUsageAsync(It.IsAny<UserScanUsageEntity>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task AnalyzeImage_VlmThrowsHttpRequestException_FallsBack_And_DoesNotConsumeQuotaIfAllFail()
+        {
+            var provider1 = new LlmProviderEntity { Id = Guid.NewGuid(), ProviderName = "OpenAI", ModelName = "gpt-4-vision", IsPrimary = true, IsActive = true, EncryptedApiKey = "enc-key", PriorityOrder = 1 };
+            var provider2 = new LlmProviderEntity { Id = Guid.NewGuid(), ProviderName = "OpenAI", ModelName = "gpt-4o", IsPrimary = true, IsActive = true, EncryptedApiKey = "enc-key", PriorityOrder = 2 };
+            _dbContext.LlmProviders.Add(provider1);
+            _dbContext.LlmProviders.Add(provider2);
+            await _dbContext.SaveChangesAsync();
+
+            var mockFile = new Mock<IFormFile>();
+            var content = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==");
+            mockFile.Setup(f => f.Length).Returns(content.Length);
+            mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
+            
+            mockFile.Setup(f => f.OpenReadStream()).Returns(() => new System.IO.MemoryStream(content));
+
+            _mockVlmService
+                .Setup(v => v.AnalyzeImageAsync("OpenAI", It.IsAny<string>(), "test-key", It.IsAny<string>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()))
+                .ThrowsAsync(new System.Net.Http.HttpRequestException("429 Too Many Requests", null, System.Net.HttpStatusCode.TooManyRequests));
+
+            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
+
+            var objectResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(500, objectResult.StatusCode);
+
+            // It should have tried both providers due to fallback logic continuing
+            _mockVlmService.Verify(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+            _mockVlmService.Verify(v => v.AnalyzeImageAsync("OpenAI", "gpt-4o", "test-key", It.IsAny<string>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+
+            _mockScanQuotaService.Verify(s => s.RefundUsageAsync(It.IsAny<UserScanUsageEntity>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+        }
+
         public void Dispose()
         {
             _dbContext.Database.EnsureDeleted();

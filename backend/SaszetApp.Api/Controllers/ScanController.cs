@@ -182,6 +182,12 @@ namespace SaszetApp.Api.Controllers
             else if (language.StartsWith("en")) language = "en";
             else language = "pl";
 
+            var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+            if (usageEntity == null)
+            {
+                return StatusCode(429, new { message = "You have reached your scan limit." });
+            }
+
             string base64Image;
             using (var memoryStream = new MemoryStream())
             {
@@ -216,16 +222,11 @@ namespace SaszetApp.Api.Controllers
                 }
                 catch (Exception ex)
                 {
+                    await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
                     _logger.LogWarning(ex, "Failed to parse uploaded image. Possible malformed image attack.");
                     return BadRequest("Invalid image file.");
                 }
                 base64Image = Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
-            }
-
-            var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
-            if (usageEntity == null)
-            {
-                return StatusCode(429, new { message = "You have reached your scan limit." });
             }
 
             PetFoodItemEntity newEntity;
@@ -273,11 +274,6 @@ namespace SaszetApp.Api.Controllers
                     }
                     catch (Exception ex)
                     {
-                        if (ex is HttpRequestException httpEx && httpEx.StatusCode.HasValue && (int)httpEx.StatusCode >= 400 && (int)httpEx.StatusCode < 500)
-                        {
-                            llmCallCompleted = true; // Count as completed to prevent quota refund
-                            throw;
-                        }
                         lastException = ex;
                         _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} (Model: {providerEntity.ModelName}) failed for image scan. Trying next backup...");
                     }

@@ -1,0 +1,578 @@
+﻿diff --git a/backend/SaszetApp.Api.Tests/AdminProviderControllerTests.cs b/backend/SaszetApp.Api.Tests/AdminProviderControllerTests.cs
+index 75e58dc..d1fd1bb 100644
+--- a/backend/SaszetApp.Api.Tests/AdminProviderControllerTests.cs
++++ b/backend/SaszetApp.Api.Tests/AdminProviderControllerTests.cs
+@@ -5,6 +5,7 @@ using System.Threading.Tasks;
+ using Microsoft.AspNetCore.Mvc;
+ using Microsoft.EntityFrameworkCore;
+ using Microsoft.Data.Sqlite;
++using Microsoft.Extensions.Caching.Memory;
+ using Moq;
+ using Moq.Protected;
+ using SaszetApp.Api.Controllers;
+@@ -43,8 +44,10 @@ namespace SaszetApp.Api.Tests
+             
+             _mockEncryption.Setup(e => e.Encrypt(It.IsAny<string>())).Returns((string s) => "enc_" + s);
+             _mockEncryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns((string s) => s.Replace("enc_", ""));
++            
++            var mockMemoryCache = new Mock<IMemoryCache>();
+ 
+-            _controller = new AdminProviderController(_dbContext, _mapper, _mockEncryption.Object, _mockVlmService.Object);
++            _controller = new AdminProviderController(_dbContext, _mapper, _mockEncryption.Object, _mockVlmService.Object, mockMemoryCache.Object);
+         }
+ 
+         [Fact]
+@@ -139,12 +142,13 @@ namespace SaszetApp.Api.Tests
+             // Assert
+             var okResult = Assert.IsType<OkObjectResult>(result);
+             _dbContext.ChangeTracker.Clear();
+-            var updated = await _dbContext.LlmProviders.FindAsync(existing.Id);
+-            Assert.NotNull(updated);
+-            Assert.Equal("new_model", updated.ModelName);
+-            Assert.Equal("enc_new_key", updated.EncryptedApiKey);
+-            Assert.True(updated.IsPrimary);
+-            Assert.False(updated.IsActive);
++            var newEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.ModelName == "new_model");
++            Assert.NotNull(newEntity);
++            Assert.NotEqual(existing.Id, newEntity.Id);
++            Assert.Equal("new_model", newEntity.ModelName);
++            Assert.Equal("enc_new_key", newEntity.EncryptedApiKey);
++            Assert.True(newEntity.IsPrimary);
++            Assert.False(newEntity.IsActive);
+         }
+ 
+         [Fact]
+diff --git a/backend/SaszetApp.Api.Tests/ScanControllerTests.cs b/backend/SaszetApp.Api.Tests/ScanControllerTests.cs
+index 56e3946..2e1fc4b 100644
+--- a/backend/SaszetApp.Api.Tests/ScanControllerTests.cs
++++ b/backend/SaszetApp.Api.Tests/ScanControllerTests.cs
+@@ -1,8 +1,11 @@
+ using System;
++using System.IO;
+ using System.Threading.Tasks;
+ using Microsoft.AspNetCore.Http;
+ using Microsoft.AspNetCore.Mvc;
+ using Microsoft.EntityFrameworkCore;
++using Microsoft.Extensions.Caching.Memory;
++using Microsoft.Extensions.Logging;
+ using Moq;
+ using SaszetApp.Api.Controllers;
+ using SaszetApp.Api.Data;
+@@ -34,9 +37,11 @@ namespace SaszetApp.Api.Tests
+             _mockEncryptionService.Setup(e => e.Decrypt(It.IsAny<string>())).Returns("test-key");
+             _mockScanQuotaService = new Mock<IScanQuotaService>();
+             _mockScanQuotaService.Setup(r => r.CheckAndRecordUsageAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(new UserScanUsageEntity());
++            var memoryCacheOptions = new Microsoft.Extensions.Options.OptionsWrapper<MemoryCacheOptions>(new MemoryCacheOptions());
++            var realMemoryCache = new MemoryCache(memoryCacheOptions);
+             _mapper = new PetFoodModelMapper();
+ 
+-            _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance, _mockEncryptionService.Object, _mockScanQuotaService.Object);
++            _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance, _mockEncryptionService.Object, _mockScanQuotaService.Object, realMemoryCache);
+             
+             var httpContext = new DefaultHttpContext();
+             var identity = new System.Security.Claims.ClaimsIdentity(new[]
+@@ -69,7 +74,8 @@ namespace SaszetApp.Api.Tests
+                 EanCode = "12345678",
+                 ProductName = "Test Food",
+                 Language = "pl",
+-                Rating = 8
++                Rating = 8,
++                UserId = "test-user-id"
+             };
+             _dbContext.PetFoodItems.Add(entity);
+             await _dbContext.SaveChangesAsync();
+@@ -126,7 +132,7 @@ namespace SaszetApp.Api.Tests
+         [Fact]
+         public async Task AnalyzeImage_NoImage_ReturnsBadRequest()
+         {
+-            var result = await _controller.AnalyzeImage(null, ScanMode.Ingredients, System.Threading.CancellationToken.None);
++            var result = await _controller.AnalyzeImage(null, System.Threading.CancellationToken.None);
+             Assert.IsType<BadRequestObjectResult>(result);
+         }
+ 
+@@ -136,7 +142,7 @@ namespace SaszetApp.Api.Tests
+             var mockFile = new Mock<IFormFile>();
+             mockFile.Setup(f => f.Length).Returns(6 * 1024 * 1024); // 6MB
+             
+-            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
++            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
+             
+             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+             Assert.Equal("Image size exceeds the 5MB limit.", badRequestResult.Value);
+@@ -149,7 +155,7 @@ namespace SaszetApp.Api.Tests
+             mockFile.Setup(f => f.Length).Returns(1 * 1024 * 1024); // 1MB
+             mockFile.Setup(f => f.ContentType).Returns("application/pdf");
+             
+-            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
++            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
+             
+             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+             Assert.Equal("Unsupported image format. Use JPEG, PNG, or WebP.", badRequestResult.Value);
+@@ -163,14 +169,11 @@ namespace SaszetApp.Api.Tests
+             await _dbContext.SaveChangesAsync();
+ 
+             var mockFile = new Mock<IFormFile>();
+-            var content = "fake image content"u8.ToArray();
++            var content = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==");
+             mockFile.Setup(f => f.Length).Returns(content.Length);
+             mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
+             
+-            var ms = new System.IO.MemoryStream(content);
+-            mockFile.Setup(f => f.CopyToAsync(It.IsAny<System.IO.Stream>(), It.IsAny<System.Threading.CancellationToken>()))
+-                .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
+-                .Returns(Task.CompletedTask);
++            mockFile.Setup(f => f.OpenReadStream()).Returns(() => new System.IO.MemoryStream(content));
+ 
+             _controller.Request.Headers["Accept-Language"] = "pl-PL";
+ 
+@@ -185,16 +188,16 @@ namespace SaszetApp.Api.Tests
+             };
+ 
+             _mockVlmService
+-                .Setup(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", ScanMode.Ingredients, "pl", It.IsAny<System.Threading.CancellationToken>()))
++                .Setup(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()))
+                 .ReturnsAsync(expectedModel);
+ 
+-            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
++            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
+ 
+             var okResult = Assert.IsType<OkObjectResult>(result);
+             var model = Assert.IsType<PetFoodItem>(okResult.Value);
+             Assert.Equal("Image Food", model.ProductName);
+             
+-            _mockVlmService.Verify(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", ScanMode.Ingredients, "pl", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
++            _mockVlmService.Verify(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+         }
+ 
+         [Fact]
+@@ -206,23 +209,20 @@ namespace SaszetApp.Api.Tests
+             await _dbContext.SaveChangesAsync();
+ 
+             var mockFile = new Mock<IFormFile>();
+-            var content = "fake image content"u8.ToArray();
++            var content = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==");
+             mockFile.Setup(f => f.Length).Returns(content.Length);
+             mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
+             
+-            var ms = new System.IO.MemoryStream(content);
+-            mockFile.Setup(f => f.CopyToAsync(It.IsAny<System.IO.Stream>(), It.IsAny<System.Threading.CancellationToken>()))
+-                .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
+-                .Returns(Task.CompletedTask);
++            mockFile.Setup(f => f.OpenReadStream()).Returns(() => new System.IO.MemoryStream(content));
+ 
+             _controller.Request.Headers["Accept-Language"] = "pl-PL";
+ 
+             _mockVlmService
+-                .Setup(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", ScanMode.Ingredients, "pl", It.IsAny<System.Threading.CancellationToken>()))
++                .Setup(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()))
+                 .ThrowsAsync(new InvalidOperationException("NO_PET_FOOD_FOUND"));
+ 
+             // Act
+-            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
++            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
+ 
+             // Assert
+             var objectResult = Assert.IsType<ObjectResult>(result);
+@@ -251,16 +251,14 @@ namespace SaszetApp.Api.Tests
+         public async Task AnalyzeImage_LimitExceeded_Returns429TooManyRequests()
+         {
+             var mockFile = new Mock<IFormFile>();
+-            var content = "fake image content"u8.ToArray();
++            var content = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==");
+             mockFile.Setup(f => f.Length).Returns(content.Length);
+             mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
+-            var ms = new System.IO.MemoryStream(content);
+-            mockFile.Setup(f => f.CopyToAsync(It.IsAny<System.IO.Stream>(), It.IsAny<System.Threading.CancellationToken>()))
+-                .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
+-                .Returns(Task.CompletedTask);
++            
++            mockFile.Setup(f => f.OpenReadStream()).Returns(() => new System.IO.MemoryStream(content));
+ 
+             _mockScanQuotaService.Setup(r => r.CheckAndRecordUsageAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync((UserScanUsageEntity?)null);
+-            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
++            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
+             var objectResult = Assert.IsType<ObjectResult>(result);
+             Assert.Equal(429, objectResult.StatusCode);
+         }
+diff --git a/backend/SaszetApp.Api/Controllers/ScanController.cs b/backend/SaszetApp.Api/Controllers/ScanController.cs
+index c9fa46a..e0e87c0 100644
+--- a/backend/SaszetApp.Api/Controllers/ScanController.cs
++++ b/backend/SaszetApp.Api/Controllers/ScanController.cs
+@@ -10,6 +10,8 @@ using SaszetApp.Api.Models;
+ using SaszetApp.Api.Services;
+ using SaszetApp.Api.Services.Mappers;
+ using SaszetApp.Api.DTOs;
++using Microsoft.Extensions.Caching.Memory;
++using SkiaSharp;
+ 
+ namespace SaszetApp.Api.Controllers
+ {
+@@ -164,7 +166,7 @@ namespace SaszetApp.Api.Controllers
+         [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ScanRatePolicy")]
+         [RequestSizeLimit(5 * 1024 * 1024)]
+         [RequestFormLimits(MultipartBodyLengthLimit = 5242880)]
+-        public async Task<IActionResult> AnalyzeImage(IFormFile image, [FromForm] ScanMode mode, System.Threading.CancellationToken cancellationToken)
++        public async Task<IActionResult> AnalyzeImage(IFormFile image, System.Threading.CancellationToken cancellationToken)
+         {
+             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+             if (string.IsNullOrEmpty(userId)) return Unauthorized();
+@@ -180,10 +182,45 @@ namespace SaszetApp.Api.Controllers
+             else if (language.StartsWith("en")) language = "en";
+             else language = "pl";
+ 
+-            using var memoryStream = new MemoryStream();
+-            await image.CopyToAsync(memoryStream, cancellationToken);
+-            memoryStream.Position = 0;
+-            var base64Image = Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
++            string base64Image;
++            using (var memoryStream = new MemoryStream())
++            {
++                try
++                {
++                    using var inputStream = image.OpenReadStream();
++                    using var codec = SKCodec.Create(inputStream);
++                    if (codec == null) throw new Exception("Failed to decode image");
++                    if (codec.Info.Width > 4096 || codec.Info.Height > 4096)
++                    {
++                        return BadRequest("Image dimensions too large.");
++                    }
++                    
++                    inputStream.Position = 0;
++
++                    await Task.Run(() =>
++                    {
++                        using var skBitmap = SKBitmap.Decode(inputStream);
++                        if (skBitmap == null) throw new Exception("Failed to decode image");
++                        
++                        using var skImage = SKImage.FromBitmap(skBitmap);
++                        using var data = skImage.Encode(SKEncodedImageFormat.Jpeg, 85); // EXIF is stripped
++                        if (data != null)
++                        {
++                            data.SaveTo(memoryStream);
++                        }
++                        else
++                        {
++                            throw new Exception("Failed to encode image");
++                        }
++                    }, cancellationToken);
++                }
++                catch (Exception ex)
++                {
++                    _logger.LogWarning(ex, "Failed to parse uploaded image. Possible malformed image attack.");
++                    return BadRequest("Invalid image file.");
++                }
++                base64Image = Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
++            }
+ 
+             var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+             if (usageEntity == null)
+@@ -225,7 +262,7 @@ namespace SaszetApp.Api.Controllers
+                     var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
+                     try
+                     {
+-                        result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, image.ContentType, mode, language, cancellationToken);
++                        result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, "image/jpeg", language, cancellationToken);
+                         llmCallCompleted = true;
+                         break;
+                     }
+@@ -236,6 +273,11 @@ namespace SaszetApp.Api.Controllers
+                     }
+                     catch (Exception ex)
+                     {
++                        if (ex is HttpRequestException httpEx && httpEx.StatusCode.HasValue && (int)httpEx.StatusCode >= 400 && (int)httpEx.StatusCode < 500)
++                        {
++                            llmCallCompleted = true; // Count as completed to prevent quota refund
++                            throw;
++                        }
+                         lastException = ex;
+                         _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} (Model: {providerEntity.ModelName}) failed for image scan. Trying next backup...");
+                     }
+diff --git a/backend/SaszetApp.Api/Models/ScanMode.cs b/backend/SaszetApp.Api/Models/ScanMode.cs
+deleted file mode 100644
+index 5c7e51c..0000000
+--- a/backend/SaszetApp.Api/Models/ScanMode.cs
++++ /dev/null
+@@ -1,8 +0,0 @@
+-namespace SaszetApp.Api.Models
+-{
+-    public enum ScanMode
+-    {
+-        Ingredients,
+-        General
+-    }
+-}
+diff --git a/backend/SaszetApp.Api/SaszetApp.Api.csproj b/backend/SaszetApp.Api/SaszetApp.Api.csproj
+index 3407c23..a18aa20 100644
+--- a/backend/SaszetApp.Api/SaszetApp.Api.csproj
++++ b/backend/SaszetApp.Api/SaszetApp.Api.csproj
+@@ -17,6 +17,7 @@
+     </PackageReference>
+     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+     <PackageReference Include="Polly" Version="8.7.0" />
++    <PackageReference Include="SkiaSharp" Version="4.150.1" />
+     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+   </ItemGroup>
+ 
+diff --git a/backend/SaszetApp.Api/Services/IVlmService.cs b/backend/SaszetApp.Api/Services/IVlmService.cs
+index ba48972..d07bcec 100644
+--- a/backend/SaszetApp.Api/Services/IVlmService.cs
++++ b/backend/SaszetApp.Api/Services/IVlmService.cs
+@@ -9,7 +9,7 @@ namespace SaszetApp.Api.Services
+     public interface IVlmService
+     {
+         Task<VlmResponseContract> AnalyzeProductAsync(string providerName, string modelName, string apiKey, string query, string language, CancellationToken cancellationToken);
+-        Task<VlmResponseContract> AnalyzeImageAsync(string providerName, string modelName, string apiKey, string base64Image, string mimeType, ScanMode mode, string language, CancellationToken cancellationToken);
++        Task<VlmResponseContract> AnalyzeImageAsync(string providerName, string modelName, string apiKey, string base64Image, string mimeType, string language, CancellationToken cancellationToken);
+         Task TestConnectionAsync(string providerName, string modelName, string apiKey, CancellationToken cancellationToken);
+     }
+ }
+diff --git a/backend/SaszetApp.Api/Services/VlmService.cs b/backend/SaszetApp.Api/Services/VlmService.cs
+index 11f86d0..9605212 100644
+--- a/backend/SaszetApp.Api/Services/VlmService.cs
++++ b/backend/SaszetApp.Api/Services/VlmService.cs
+@@ -65,25 +65,13 @@ namespace SaszetApp.Api.Services
+             return Sanitize(vlmResponse);
+         }
+ 
+-        public async Task<VlmResponseContract> AnalyzeImageAsync(string providerName, string modelName, string apiKey, string base64Image, string mimeType, ScanMode mode, string language, CancellationToken cancellationToken)
++        public async Task<VlmResponseContract> AnalyzeImageAsync(string providerName, string modelName, string apiKey, string base64Image, string mimeType, string language, CancellationToken cancellationToken)
+         {
+-            string systemPrompt = "";
+-            if (mode == ScanMode.Ingredients)
+-            {
+-                systemPrompt = $"You are a pet food analyst. The user will provide a photo of the ingredients label. " +
++            string systemPrompt = $"You are a pet food analyst. The user will provide a photo of the ingredients label. " +
+                                $"Analyze the ingredients accurately. Return ONLY a JSON object exactly matching this structure: " +
+                                 $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
+                                $"If the image does not contain pet food packaging or an ingredients list, return exactly: {{\"errorCode\": \"NO_PET_FOOD_FOUND\"}}. " +
+                                $"All text values (except productName) MUST be in the '{language}' language.";
+-            }
+-            else
+-            {
+-                systemPrompt = $"You are a pet food analyst. The user will provide a photo of the pet food package. " +
+-                               $"Recognize the brand and product and review its dietary properties. Return ONLY a JSON object exactly matching this structure: " +
+-                                $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
+-                               $"If the image does not contain pet food packaging or an ingredients list, return exactly: {{\"errorCode\": \"NO_PET_FOOD_FOUND\"}}. " +
+-                               $"All text values (except productName) MUST be in the '{language}' language.";
+-            }
+ 
+             string jsonResponse = await CallProviderForImageAsync(providerName, modelName, apiKey, systemPrompt, base64Image, mimeType, cancellationToken);
+ 
+@@ -126,7 +114,7 @@ namespace SaszetApp.Api.Services
+                 {
+                     var errorContent = await res.Content.ReadAsStringAsync(cancellationToken);
+                     res.Dispose();
+-                    throw new InvalidOperationException($"API error: {res.StatusCode} - {errorContent}");
++                    throw new HttpRequestException($"API error: {res.StatusCode} - {errorContent}", null, res.StatusCode);
+                 }
+                 return res;
+             });
+@@ -135,7 +123,7 @@ namespace SaszetApp.Api.Services
+             {
+                 var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                 response.Dispose();
+-                throw new InvalidOperationException($"API error: {response.StatusCode} - {errorContent}");
++                throw new HttpRequestException($"API error: {response.StatusCode} - {errorContent}", null, response.StatusCode);
+             }
+ 
+             return response;
+diff --git a/frontend-mobile/src/api/scanApi.ts b/frontend-mobile/src/api/scanApi.ts
+index d0bdcd7..4eb9369 100644
+--- a/frontend-mobile/src/api/scanApi.ts
++++ b/frontend-mobile/src/api/scanApi.ts
+@@ -15,19 +15,17 @@ export const fetchAnalysisResult = async (query: string, language: string, signa
+ };
+ 
+ export const uploadImageForAnalysis = async (
+-  imageBlob: Blob, 
+-  mode: 'Ingredients' | 'General', 
+-  language: string, 
++  imageBlob: Blob,
++  language: string = 'pl',
+   signal?: AbortSignal
+ ): Promise<VLMResponseContract> => {
+   const formData = new FormData();
+-  formData.append('image', imageBlob, 'photo.jpg'); 
+-  formData.append('mode', mode);
+-
++  formData.append('image', imageBlob, 'capture.jpg');
++  
+   const response = await apiClient.post<VLMResponseContract>('/Scan/analyze-image', formData, {
+-    headers: { 
+-      'Accept-Language': language,
+-      'Content-Type': 'multipart/form-data'
++    headers: {
++      'Content-Type': 'multipart/form-data',
++      'Accept-Language': language
+     },
+     signal,
+     timeout: 120000
+diff --git a/frontend-mobile/src/components/BottomTabBar.test.tsx b/frontend-mobile/src/components/BottomTabBar.test.tsx
+index 22ef17b..e64c766 100644
+--- a/frontend-mobile/src/components/BottomTabBar.test.tsx
++++ b/frontend-mobile/src/components/BottomTabBar.test.tsx
+@@ -92,8 +92,7 @@ describe('BottomTabBar', () => {
+       expect(compressImage).toHaveBeenCalledWith(testFile);
+       expect(mockedNavigate).toHaveBeenCalledWith('/product/photo', {
+         state: { 
+-          imageBlob: expect.any(Blob), 
+-          scanMode: 'Ingredients' 
++          imageBlob: expect.any(Blob)
+         }
+       });
+     });
+diff --git a/frontend-mobile/src/components/BottomTabBar.tsx b/frontend-mobile/src/components/BottomTabBar.tsx
+index 3b04199..53ee9bf 100644
+--- a/frontend-mobile/src/components/BottomTabBar.tsx
++++ b/frontend-mobile/src/components/BottomTabBar.tsx
+@@ -1,39 +1,18 @@
+-import React, { useRef } from 'react';
+-import { Link, useLocation, useNavigate } from 'react-router-dom';
++import React from 'react';
++import { Link, useLocation } from 'react-router-dom';
+ import { Home, ScanLine, User, Camera } from 'lucide-react';
+ import clsx from 'clsx';
+-import { compressImage } from '../utils/imageUtils';
++import { useNativeCameraScanner } from '../hooks/useNativeCameraScanner';
+ 
+ export default function BottomTabBar() {
+   const location = useLocation();
+-  const navigate = useNavigate();
+-  const fileInputRef = useRef<HTMLInputElement>(null);
++  const { fileInputRef, triggerCamera, handleFileChange } = useNativeCameraScanner();
+ 
+   // Hide bottom tab bar on the immersive scanner view
+   if (location.pathname === '/scan') {
+     return null;
+   }
+ 
+-  const triggerFileInput = () => {
+-    if (fileInputRef.current) {
+-      fileInputRef.current.click();
+-    }
+-  };
+-
+-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+-    const file = e.target.files?.[0];
+-    // Clear the input so the same file can be selected again if needed
+-    e.target.value = '';
+-    if (file) {
+-      try {
+-        const compressedBlob = await compressImage(file);
+-        navigate('/product/photo', { state: { imageBlob: compressedBlob, scanMode: 'Ingredients' } });
+-      } catch (error) {
+-        console.error('Failed to compress image:', error);
+-      }
+-    }
+-  };
+-
+   return (
+     <div className="fixed bottom-0 left-0 w-full h-20 bg-white/70 backdrop-blur-md border-t border-gray-200/50 flex justify-around items-center px-4 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+       <Link to="/" className={clsx("flex flex-col items-center justify-center space-y-1 transition-colors duration-300 w-12", location.pathname === '/' ? "text-[var(--color-primary)]" : "text-gray-400 hover:text-gray-600")}>
+@@ -44,7 +23,7 @@ export default function BottomTabBar() {
+         <ScanLine size={24} strokeWidth={2.5} />
+       </Link>
+ 
+-      <button onClick={triggerFileInput} className="relative -top-5 flex flex-col items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-blue-500 to-cyan-400 text-white shadow-lg shadow-blue-500/40 hover:scale-105 transition-transform duration-300" aria-label="Scan Ingredients">
++      <button onClick={triggerCamera} className="relative -top-5 flex flex-col items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-blue-500 to-cyan-400 text-white shadow-lg shadow-blue-500/40 hover:scale-105 transition-transform duration-300" aria-label="Scan Ingredients">
+         <Camera size={24} strokeWidth={2.5} />
+       </button>
+ 
+diff --git a/frontend-mobile/src/hooks/useNativeCameraScanner.ts b/frontend-mobile/src/hooks/useNativeCameraScanner.ts
+new file mode 100644
+index 0000000..66479bc
+--- /dev/null
++++ b/frontend-mobile/src/hooks/useNativeCameraScanner.ts
+@@ -0,0 +1,34 @@
++import { useRef } from 'react';
++import { useNavigate } from 'react-router-dom';
++import { compressImage } from '../utils/imageUtils';
++
++export function useNativeCameraScanner() {
++  const navigate = useNavigate();
++  const fileInputRef = useRef<HTMLInputElement>(null);
++
++  const triggerCamera = () => {
++    if (fileInputRef.current) {
++      fileInputRef.current.click();
++    }
++  };
++
++  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
++    const file = e.target.files?.[0];
++    e.target.value = '';
++    
++    if (file) {
++      try {
++        const compressedBlob = await compressImage(file);
++        navigate('/product/photo', { state: { imageBlob: compressedBlob } });
++      } catch (error) {
++        console.error('Failed to compress image:', error);
++      }
++    }
++  };
++
++  return {
++    fileInputRef,
++    triggerCamera,
++    handleFileChange,
++  };
++}
+diff --git a/frontend-mobile/src/pages/ResultView.tsx b/frontend-mobile/src/pages/ResultView.tsx
+index a49a091..09be80d 100644
+--- a/frontend-mobile/src/pages/ResultView.tsx
++++ b/frontend-mobile/src/pages/ResultView.tsx
+@@ -20,19 +20,26 @@ export default function ResultView() {
+   const [ingredientsExpanded, setIngredientsExpanded] = useState(false);
+ 
+   useEffect(() => {
+-    const state = location.state as { imageBlob?: Blob, scanMode?: 'Ingredients' | 'General' };
++    const state = location.state as { imageBlob?: Blob };
+     
++    // If we are on /product/photo but have no image in state, it's a page refresh. Abort immediately.
++    if (id === 'photo' && !state?.imageBlob) {
++      setLoading(false);
++      return;
++    }
++
+     if (!id && !state?.imageBlob) {
+       setLoading(false);
+       return;
+     }
+     
+     let ignore = false;
++    const controller = new AbortController();
+     setError(null);
+     setLoading(true);
+     
+-    if (state?.imageBlob && state?.scanMode) {
+-      uploadImageForAnalysis(state.imageBlob, state.scanMode, i18n.language)
++    if (state?.imageBlob) {
++      uploadImageForAnalysis(state.imageBlob, i18n.language, controller.signal)
+         .then(res => {
+           if (!ignore) {
+             setResult(res);
+@@ -45,6 +52,7 @@ export default function ResultView() {
+           }
+         })
+         .catch(err => {
++          if (err?.name === 'CanceledError' || err?.name === 'AbortError') return;
+           if (!ignore) {
+             console.error(err);
+             if (err?.response?.status === 429) {
+@@ -74,6 +82,7 @@ export default function ResultView() {
+           }
+         })
+         .catch(err => {
++          if (err?.name === 'CanceledError' || err?.name === 'AbortError') return;
+           if (!ignore) {
+             if (err?.response?.status === 429) {
+               setError(t('rate_limit_exceeded'));
+@@ -90,6 +99,7 @@ export default function ResultView() {
+       
+     return () => {
+       ignore = true;
++      controller.abort();
+     };
+   }, [id, location.state, i18n.language, addScan]);
+ 
