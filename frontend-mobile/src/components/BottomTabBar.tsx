@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Link, useLocation } from 'react-router-dom';
 import { Home, ScanLine, User, Camera } from 'lucide-react';
 import clsx from 'clsx';
