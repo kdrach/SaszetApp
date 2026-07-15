@@ -198,7 +198,7 @@ namespace SaszetApp.Api.Controllers
                     if (codec == null) throw new Exception("Failed to decode image");
                     if (codec.Info.Width > 4096 || codec.Info.Height > 4096)
                     {
-                        return BadRequest("Image dimensions too large.");
+                        throw new Exception("Image dimensions too large.");
                     }
                     
                     inputStream.Position = 0;
