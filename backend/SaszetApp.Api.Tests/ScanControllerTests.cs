@@ -22,7 +22,6 @@ namespace SaszetApp.Api.Tests
         private readonly Mock<IVlmService> _mockVlmService;
         private readonly Mock<IEncryptionService> _mockEncryptionService;
         private readonly Mock<IScanQuotaService> _mockScanQuotaService;
-        private readonly Mock<IMemoryCache> _mockMemoryCache;
         private readonly IPetFoodModelMapper _mapper;
         private readonly ScanController _controller;
 

@@ -182,23 +182,45 @@ namespace SaszetApp.Api.Controllers
             else if (language.StartsWith("en")) language = "en";
             else language = "pl";
 
-            using var memoryStream = new MemoryStream();
-            try
+            string base64Image;
+            using (var memoryStream = new MemoryStream())
             {
-                using var inputStream = image.OpenReadStream();
-                using var skBitmap = SKBitmap.Decode(inputStream);
-                if (skBitmap == null) throw new Exception("Failed to decode image");
-                
-                using var skImage = SKImage.FromBitmap(skBitmap);
-                using var data = skImage.Encode(SKEncodedImageFormat.Jpeg, 85); // EXIF is stripped
-                data.SaveTo(memoryStream);
+                try
+                {
+                    using var inputStream = image.OpenReadStream();
+                    using var codec = SKCodec.Create(inputStream);
+                    if (codec == null) throw new Exception("Failed to decode image");
+                    if (codec.Info.Width > 4096 || codec.Info.Height > 4096)
+                    {
+                        return BadRequest("Image dimensions too large.");
+                    }
+                    
+                    inputStream.Position = 0;
+
+                    await Task.Run(() =>
+                    {
+                        using var skBitmap = SKBitmap.Decode(inputStream);
+                        if (skBitmap == null) throw new Exception("Failed to decode image");
+                        
+                        using var skImage = SKImage.FromBitmap(skBitmap);
+                        using var data = skImage.Encode(SKEncodedImageFormat.Jpeg, 85); // EXIF is stripped
+                        if (data != null)
+                        {
+                            data.SaveTo(memoryStream);
+                        }
+                        else
+                        {
+                            throw new Exception("Failed to encode image");
+                        }
+                    }, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to parse uploaded image. Possible malformed image attack.");
+                    return BadRequest("Invalid image file.");
+                }
+                base64Image = Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to parse uploaded image. Possible malformed image attack.");
-                return BadRequest("Invalid image file.");
-            }
-            var base64Image = Convert.ToBase64String(memoryStream.ToArray());
 
             var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
             if (usageEntity == null)
@@ -251,7 +273,7 @@ namespace SaszetApp.Api.Controllers
                     }
                     catch (Exception ex)
                     {
-                        if (ex.Message.Contains("API error: 4")) // HTTP 4xx error (client error)
+                        if (ex is HttpRequestException httpEx && httpEx.StatusCode.HasValue && (int)httpEx.StatusCode >= 400 && (int)httpEx.StatusCode < 500)
                         {
                             llmCallCompleted = true; // Count as completed to prevent quota refund
                             throw;

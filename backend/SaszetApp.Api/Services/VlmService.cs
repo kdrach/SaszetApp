@@ -114,7 +114,7 @@ namespace SaszetApp.Api.Services
                 {
                     var errorContent = await res.Content.ReadAsStringAsync(cancellationToken);
                     res.Dispose();
-                    throw new InvalidOperationException($"API error: {res.StatusCode} - {errorContent}");
+                    throw new HttpRequestException($"API error: {res.StatusCode} - {errorContent}", null, res.StatusCode);
                 }
                 return res;
             });
@@ -123,7 +123,7 @@ namespace SaszetApp.Api.Services
             {
                 var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
                 response.Dispose();
-                throw new InvalidOperationException($"API error: {response.StatusCode} - {errorContent}");
+                throw new HttpRequestException($"API error: {response.StatusCode} - {errorContent}", null, response.StatusCode);
             }
 
             return response;
