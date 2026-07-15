@@ -65,25 +65,13 @@ namespace SaszetApp.Api.Services
             return Sanitize(vlmResponse);
         }
 
-        public async Task<VlmResponseContract> AnalyzeImageAsync(string providerName, string modelName, string apiKey, string base64Image, string mimeType, ScanMode mode, string language, CancellationToken cancellationToken)
+        public async Task<VlmResponseContract> AnalyzeImageAsync(string providerName, string modelName, string apiKey, string base64Image, string mimeType, string language, CancellationToken cancellationToken)
         {
-            string systemPrompt = "";
-            if (mode == ScanMode.Ingredients)
-            {
-                systemPrompt = $"You are a pet food analyst. The user will provide a photo of the ingredients label. " +
+            string systemPrompt = $"You are a pet food analyst. The user will provide a photo of the ingredients label. " +
                                $"Analyze the ingredients accurately. Return ONLY a JSON object exactly matching this structure: " +
                                 $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
                                $"If the image does not contain pet food packaging or an ingredients list, return exactly: {{\"errorCode\": \"NO_PET_FOOD_FOUND\"}}. " +
                                $"All text values (except productName) MUST be in the '{language}' language.";
-            }
-            else
-            {
-                systemPrompt = $"You are a pet food analyst. The user will provide a photo of the pet food package. " +
-                               $"Recognize the brand and product and review its dietary properties. Return ONLY a JSON object exactly matching this structure: " +
-                                $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
-                               $"If the image does not contain pet food packaging or an ingredients list, return exactly: {{\"errorCode\": \"NO_PET_FOOD_FOUND\"}}. " +
-                               $"All text values (except productName) MUST be in the '{language}' language.";
-            }
 
             string jsonResponse = await CallProviderForImageAsync(providerName, modelName, apiKey, systemPrompt, base64Image, mimeType, cancellationToken);
 

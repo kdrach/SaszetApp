@@ -20,19 +20,26 @@ export default function ResultView() {
   const [ingredientsExpanded, setIngredientsExpanded] = useState(false);
 
   useEffect(() => {
-    const state = location.state as { imageBlob?: Blob, scanMode?: 'Ingredients' | 'General' };
+    const state = location.state as { imageBlob?: Blob };
     
+    // If we are on /product/photo but have no image in state, it's a page refresh. Abort immediately.
+    if (id === 'photo' && !state?.imageBlob) {
+      setLoading(false);
+      return;
+    }
+
     if (!id && !state?.imageBlob) {
       setLoading(false);
       return;
     }
     
     let ignore = false;
+    const controller = new AbortController();
     setError(null);
     setLoading(true);
     
-    if (state?.imageBlob && state?.scanMode) {
-      uploadImageForAnalysis(state.imageBlob, state.scanMode, i18n.language)
+    if (state?.imageBlob) {
+      uploadImageForAnalysis(state.imageBlob, i18n.language, controller.signal)
         .then(res => {
           if (!ignore) {
             setResult(res);
@@ -45,6 +52,7 @@ export default function ResultView() {
           }
         })
         .catch(err => {
+          if (err?.name === 'CanceledError' || err?.name === 'AbortError') return;
           if (!ignore) {
             console.error(err);
             if (err?.response?.status === 429) {
@@ -74,6 +82,7 @@ export default function ResultView() {
           }
         })
         .catch(err => {
+          if (err?.name === 'CanceledError' || err?.name === 'AbortError') return;
           if (!ignore) {
             if (err?.response?.status === 429) {
               setError(t('rate_limit_exceeded'));
@@ -90,6 +99,7 @@ export default function ResultView() {
       
     return () => {
       ignore = true;
+      controller.abort();
     };
   }, [id, location.state, i18n.language, addScan]);
 

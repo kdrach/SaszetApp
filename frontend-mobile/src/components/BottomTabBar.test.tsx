@@ -92,8 +92,7 @@ describe('BottomTabBar', () => {
       expect(compressImage).toHaveBeenCalledWith(testFile);
       expect(mockedNavigate).toHaveBeenCalledWith('/product/photo', {
         state: { 
-          imageBlob: expect.any(Blob), 
-          scanMode: 'Ingredients' 
+          imageBlob: expect.any(Blob)
         }
       });
     });

@@ -10,6 +10,8 @@ using SaszetApp.Api.Models;
 using SaszetApp.Api.Services;
 using SaszetApp.Api.Services.Mappers;
 using SaszetApp.Api.DTOs;
+using Microsoft.Extensions.Caching.Memory;
+using SkiaSharp;
 
 namespace SaszetApp.Api.Controllers
 {
@@ -164,7 +166,7 @@ namespace SaszetApp.Api.Controllers
         [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ScanRatePolicy")]
         [RequestSizeLimit(5 * 1024 * 1024)]
         [RequestFormLimits(MultipartBodyLengthLimit = 5242880)]
-        public async Task<IActionResult> AnalyzeImage(IFormFile image, [FromForm] ScanMode mode, System.Threading.CancellationToken cancellationToken)
+        public async Task<IActionResult> AnalyzeImage(IFormFile image, System.Threading.CancellationToken cancellationToken)
         {
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId)) return Unauthorized();
@@ -181,9 +183,22 @@ namespace SaszetApp.Api.Controllers
             else language = "pl";
 
             using var memoryStream = new MemoryStream();
-            await image.CopyToAsync(memoryStream, cancellationToken);
-            memoryStream.Position = 0;
-            var base64Image = Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
+            try
+            {
+                using var inputStream = image.OpenReadStream();
+                using var skBitmap = SKBitmap.Decode(inputStream);
+                if (skBitmap == null) throw new Exception("Failed to decode image");
+                
+                using var skImage = SKImage.FromBitmap(skBitmap);
+                using var data = skImage.Encode(SKEncodedImageFormat.Jpeg, 85); // EXIF is stripped
+                data.SaveTo(memoryStream);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse uploaded image. Possible malformed image attack.");
+                return BadRequest("Invalid image file.");
+            }
+            var base64Image = Convert.ToBase64String(memoryStream.ToArray());
 
             var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
             if (usageEntity == null)
@@ -225,7 +240,7 @@ namespace SaszetApp.Api.Controllers
                     var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
                     try
                     {
-                        result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, image.ContentType, mode, language, cancellationToken);
+                        result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, "image/jpeg", language, cancellationToken);
                         llmCallCompleted = true;
                         break;
                     }
@@ -236,6 +251,11 @@ namespace SaszetApp.Api.Controllers
                     }
                     catch (Exception ex)
                     {
+                        if (ex.Message.Contains("API error: 4")) // HTTP 4xx error (client error)
+                        {
+                            llmCallCompleted = true; // Count as completed to prevent quota refund
+                            throw;
+                        }
                         lastException = ex;
                         _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} (Model: {providerEntity.ModelName}) failed for image scan. Trying next backup...");
                     }

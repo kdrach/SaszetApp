@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using Moq.Protected;
 using SaszetApp.Api.Controllers;
@@ -43,8 +44,10 @@ namespace SaszetApp.Api.Tests
             
             _mockEncryption.Setup(e => e.Encrypt(It.IsAny<string>())).Returns((string s) => "enc_" + s);
             _mockEncryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns((string s) => s.Replace("enc_", ""));
+            
+            var mockMemoryCache = new Mock<IMemoryCache>();
 
-            _controller = new AdminProviderController(_dbContext, _mapper, _mockEncryption.Object, _mockVlmService.Object);
+            _controller = new AdminProviderController(_dbContext, _mapper, _mockEncryption.Object, _mockVlmService.Object, mockMemoryCache.Object);
         }
 
         [Fact]
@@ -139,12 +142,13 @@ namespace SaszetApp.Api.Tests
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result);
             _dbContext.ChangeTracker.Clear();
-            var updated = await _dbContext.LlmProviders.FindAsync(existing.Id);
-            Assert.NotNull(updated);
-            Assert.Equal("new_model", updated.ModelName);
-            Assert.Equal("enc_new_key", updated.EncryptedApiKey);
-            Assert.True(updated.IsPrimary);
-            Assert.False(updated.IsActive);
+            var newEntity = await _dbContext.LlmProviders.FirstOrDefaultAsync(p => p.ModelName == "new_model");
+            Assert.NotNull(newEntity);
+            Assert.NotEqual(existing.Id, newEntity.Id);
+            Assert.Equal("new_model", newEntity.ModelName);
+            Assert.Equal("enc_new_key", newEntity.EncryptedApiKey);
+            Assert.True(newEntity.IsPrimary);
+            Assert.False(newEntity.IsActive);
         }
 
         [Fact]

@@ -1,8 +1,11 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Moq;
 using SaszetApp.Api.Controllers;
 using SaszetApp.Api.Data;
@@ -19,6 +22,7 @@ namespace SaszetApp.Api.Tests
         private readonly Mock<IVlmService> _mockVlmService;
         private readonly Mock<IEncryptionService> _mockEncryptionService;
         private readonly Mock<IScanQuotaService> _mockScanQuotaService;
+        private readonly Mock<IMemoryCache> _mockMemoryCache;
         private readonly IPetFoodModelMapper _mapper;
         private readonly ScanController _controller;
 
@@ -34,9 +38,11 @@ namespace SaszetApp.Api.Tests
             _mockEncryptionService.Setup(e => e.Decrypt(It.IsAny<string>())).Returns("test-key");
             _mockScanQuotaService = new Mock<IScanQuotaService>();
             _mockScanQuotaService.Setup(r => r.CheckAndRecordUsageAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync(new UserScanUsageEntity());
+            var memoryCacheOptions = new Microsoft.Extensions.Options.OptionsWrapper<MemoryCacheOptions>(new MemoryCacheOptions());
+            var realMemoryCache = new MemoryCache(memoryCacheOptions);
             _mapper = new PetFoodModelMapper();
 
-            _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance, _mockEncryptionService.Object, _mockScanQuotaService.Object);
+            _controller = new ScanController(_dbContext, _mockVlmService.Object, _mapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ScanController>.Instance, _mockEncryptionService.Object, _mockScanQuotaService.Object, realMemoryCache);
             
             var httpContext = new DefaultHttpContext();
             var identity = new System.Security.Claims.ClaimsIdentity(new[]
@@ -69,7 +75,8 @@ namespace SaszetApp.Api.Tests
                 EanCode = "12345678",
                 ProductName = "Test Food",
                 Language = "pl",
-                Rating = 8
+                Rating = 8,
+                UserId = "test-user-id"
             };
             _dbContext.PetFoodItems.Add(entity);
             await _dbContext.SaveChangesAsync();
@@ -126,7 +133,7 @@ namespace SaszetApp.Api.Tests
         [Fact]
         public async Task AnalyzeImage_NoImage_ReturnsBadRequest()
         {
-            var result = await _controller.AnalyzeImage(null, ScanMode.Ingredients, System.Threading.CancellationToken.None);
+            var result = await _controller.AnalyzeImage(null, System.Threading.CancellationToken.None);
             Assert.IsType<BadRequestObjectResult>(result);
         }
 
@@ -136,7 +143,7 @@ namespace SaszetApp.Api.Tests
             var mockFile = new Mock<IFormFile>();
             mockFile.Setup(f => f.Length).Returns(6 * 1024 * 1024); // 6MB
             
-            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
+            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
             
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             Assert.Equal("Image size exceeds the 5MB limit.", badRequestResult.Value);
@@ -149,7 +156,7 @@ namespace SaszetApp.Api.Tests
             mockFile.Setup(f => f.Length).Returns(1 * 1024 * 1024); // 1MB
             mockFile.Setup(f => f.ContentType).Returns("application/pdf");
             
-            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
+            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
             
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             Assert.Equal("Unsupported image format. Use JPEG, PNG, or WebP.", badRequestResult.Value);
@@ -163,14 +170,11 @@ namespace SaszetApp.Api.Tests
             await _dbContext.SaveChangesAsync();
 
             var mockFile = new Mock<IFormFile>();
-            var content = "fake image content"u8.ToArray();
+            var content = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==");
             mockFile.Setup(f => f.Length).Returns(content.Length);
             mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
             
-            var ms = new System.IO.MemoryStream(content);
-            mockFile.Setup(f => f.CopyToAsync(It.IsAny<System.IO.Stream>(), It.IsAny<System.Threading.CancellationToken>()))
-                .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
-                .Returns(Task.CompletedTask);
+            mockFile.Setup(f => f.OpenReadStream()).Returns(() => new System.IO.MemoryStream(content));
 
             _controller.Request.Headers["Accept-Language"] = "pl-PL";
 
@@ -185,16 +189,16 @@ namespace SaszetApp.Api.Tests
             };
 
             _mockVlmService
-                .Setup(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", ScanMode.Ingredients, "pl", It.IsAny<System.Threading.CancellationToken>()))
+                .Setup(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()))
                 .ReturnsAsync(expectedModel);
 
-            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
+            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
 
             var okResult = Assert.IsType<OkObjectResult>(result);
             var model = Assert.IsType<PetFoodItem>(okResult.Value);
             Assert.Equal("Image Food", model.ProductName);
             
-            _mockVlmService.Verify(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", ScanMode.Ingredients, "pl", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+            _mockVlmService.Verify(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
         }
 
         [Fact]
@@ -206,23 +210,20 @@ namespace SaszetApp.Api.Tests
             await _dbContext.SaveChangesAsync();
 
             var mockFile = new Mock<IFormFile>();
-            var content = "fake image content"u8.ToArray();
+            var content = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==");
             mockFile.Setup(f => f.Length).Returns(content.Length);
             mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
             
-            var ms = new System.IO.MemoryStream(content);
-            mockFile.Setup(f => f.CopyToAsync(It.IsAny<System.IO.Stream>(), It.IsAny<System.Threading.CancellationToken>()))
-                .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
-                .Returns(Task.CompletedTask);
+            mockFile.Setup(f => f.OpenReadStream()).Returns(() => new System.IO.MemoryStream(content));
 
             _controller.Request.Headers["Accept-Language"] = "pl-PL";
 
             _mockVlmService
-                .Setup(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", ScanMode.Ingredients, "pl", It.IsAny<System.Threading.CancellationToken>()))
+                .Setup(v => v.AnalyzeImageAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<string>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("NO_PET_FOOD_FOUND"));
 
             // Act
-            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
+            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
 
             // Assert
             var objectResult = Assert.IsType<ObjectResult>(result);
@@ -251,16 +252,14 @@ namespace SaszetApp.Api.Tests
         public async Task AnalyzeImage_LimitExceeded_Returns429TooManyRequests()
         {
             var mockFile = new Mock<IFormFile>();
-            var content = "fake image content"u8.ToArray();
+            var content = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==");
             mockFile.Setup(f => f.Length).Returns(content.Length);
             mockFile.Setup(f => f.ContentType).Returns("image/jpeg");
-            var ms = new System.IO.MemoryStream(content);
-            mockFile.Setup(f => f.CopyToAsync(It.IsAny<System.IO.Stream>(), It.IsAny<System.Threading.CancellationToken>()))
-                .Callback<System.IO.Stream, System.Threading.CancellationToken>((stream, token) => ms.CopyTo(stream))
-                .Returns(Task.CompletedTask);
+            
+            mockFile.Setup(f => f.OpenReadStream()).Returns(() => new System.IO.MemoryStream(content));
 
             _mockScanQuotaService.Setup(r => r.CheckAndRecordUsageAsync(It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>())).ReturnsAsync((UserScanUsageEntity?)null);
-            var result = await _controller.AnalyzeImage(mockFile.Object, ScanMode.Ingredients, System.Threading.CancellationToken.None);
+            var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
             var objectResult = Assert.IsType<ObjectResult>(result);
             Assert.Equal(429, objectResult.StatusCode);
         }

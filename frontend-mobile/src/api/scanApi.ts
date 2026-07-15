@@ -15,19 +15,17 @@ export const fetchAnalysisResult = async (query: string, language: string, signa
 };
 
 export const uploadImageForAnalysis = async (
-  imageBlob: Blob, 
-  mode: 'Ingredients' | 'General', 
-  language: string, 
+  imageBlob: Blob,
+  language: string = 'pl',
   signal?: AbortSignal
 ): Promise<VLMResponseContract> => {
   const formData = new FormData();
-  formData.append('image', imageBlob, 'photo.jpg'); 
-  formData.append('mode', mode);
-
+  formData.append('image', imageBlob, 'capture.jpg');
+  
   const response = await apiClient.post<VLMResponseContract>('/Scan/analyze-image', formData, {
-    headers: { 
-      'Accept-Language': language,
-      'Content-Type': 'multipart/form-data'
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      'Accept-Language': language
     },
     signal,
     timeout: 120000
