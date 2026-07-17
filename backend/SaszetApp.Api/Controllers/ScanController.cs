@@ -338,11 +338,19 @@ namespace SaszetApp.Api.Controllers
             var allowedMimeTypes = new[] { "image/jpeg", "image/png", "image/webp" };
             var base64Images = new System.Collections.Generic.List<string>();
 
-            // Consume quota per comparison request
-            var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
-            if (usageEntity == null)
+            var usageEntities = new System.Collections.Generic.List<UserScanUsageEntity>();
+            for (int i = 0; i < images.Count; i++)
             {
-                return StatusCode(429, new { message = "You have reached your scan limit." });
+                var usage = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+                if (usage == null)
+                {
+                    foreach (var u in usageEntities)
+                    {
+                        await _scanQuotaService.RefundUsageAsync(u, cancellationToken);
+                    }
+                    return StatusCode(429, new { message = "You have reached your scan limit." });
+                }
+                usageEntities.Add(usage);
             }
 
             try
@@ -356,28 +364,36 @@ namespace SaszetApp.Api.Controllers
                     using var inputStream = image.OpenReadStream();
                     using var codec = SKCodec.Create(inputStream);
                     if (codec == null) throw new Exception("Failed to decode image");
-                    if (codec.Info.Width > 4096 || codec.Info.Height > 4096) throw new Exception("Image dimensions too large.");
+                    if (codec.Info.Width > 2048 || codec.Info.Height > 2048) throw new Exception("Image dimensions too large.");
                     
                     inputStream.Position = 0;
-                    using var skBitmap = SKBitmap.Decode(inputStream);
-                    if (skBitmap == null) throw new Exception("Failed to decode image");
                     
-                    using var skImage = SKImage.FromBitmap(skBitmap);
-                    using var data = skImage.Encode(SKEncodedImageFormat.Jpeg, 85);
-                    if (data != null)
+                    await Task.Run(() =>
                     {
-                        data.SaveTo(memoryStream);
-                    }
-                    else
-                    {
-                        throw new Exception("Failed to encode image");
-                    }
+                        using var skBitmap = SKBitmap.Decode(inputStream);
+                        if (skBitmap == null) throw new Exception("Failed to decode image");
+                        
+                        using var skImage = SKImage.FromBitmap(skBitmap);
+                        using var data = skImage.Encode(SKEncodedImageFormat.Jpeg, 85);
+                        if (data != null)
+                        {
+                            data.SaveTo(memoryStream);
+                        }
+                        else
+                        {
+                            throw new Exception("Failed to encode image");
+                        }
+                    }, cancellationToken);
+
                     base64Images.Add(Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length));
                 }
             }
             catch (Exception ex)
             {
-                await _scanQuotaService.RefundUsageAsync(usageEntity, cancellationToken);
+                foreach (var u in usageEntities)
+                {
+                    await _scanQuotaService.RefundUsageAsync(u, cancellationToken);
+                }
                 _logger.LogWarning(ex, "Failed to parse uploaded images.");
                 return BadRequest("Invalid image file(s).");
             }
@@ -407,7 +423,10 @@ namespace SaszetApp.Api.Controllers
 
                 if (fallbackChain == null || !fallbackChain.Any())
                 {
-                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                    foreach (var u in usageEntities)
+                    {
+                        await _scanQuotaService.RefundUsageAsync(u, System.Threading.CancellationToken.None);
+                    }
                     return StatusCode(503, new { message = "No active keys or primary LLM provider configured." });
                 }
 
@@ -423,6 +442,13 @@ namespace SaszetApp.Api.Controllers
                         llmCallCompleted = true;
                         break;
                     }
+                    catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode >= System.Net.HttpStatusCode.BadRequest && ex.StatusCode < System.Net.HttpStatusCode.InternalServerError)
+                    {
+                        llmCallCompleted = true;
+                        lastException = ex;
+                        _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} failed with 4xx for comparison.");
+                        break;
+                    }
                     catch (Exception ex)
                     {
                         lastException = ex;
@@ -436,36 +462,26 @@ namespace SaszetApp.Api.Controllers
                 }
 
                 var models = new System.Collections.Generic.List<PetFoodItem>();
-                foreach (var prod in result.Products)
+                if (result.Products != null)
                 {
-                    var newEntity = new PetFoodItemEntity
+                    foreach (var prod in result.Products)
                     {
-                        Id = Guid.NewGuid(),
-                        UserId = userId,
-                        ProductName = prod.ProductName,
-                        Language = language,
-                        Rating = prod.Rating,
-                        Pros = prod.Pros,
-                        Cons = prod.Cons,
-                        Summary = prod.Summary,
-                        ExtractedIngredients = prod.ExtractedIngredients,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    // Not caching the multi-comparison result as a block, but saving individual items is optional.
-                    // For now, we return without inserting them to DB as per option A.
-                    // Or we map directly to Model to return.
-                    var model = new PetFoodItem
-                    {
-                        Id = newEntity.Id,
-                        ProductName = newEntity.ProductName,
-                        Language = newEntity.Language,
-                        Rating = newEntity.Rating,
-                        Pros = newEntity.Pros,
-                        Cons = newEntity.Cons,
-                        Summary = newEntity.Summary,
-                        ExtractedIngredients = newEntity.ExtractedIngredients
-                    };
-                    models.Add(model);
+                        if (prod == null || string.IsNullOrWhiteSpace(prod.ProductName))
+                            continue;
+
+                        var model = new PetFoodItem
+                        {
+                            Id = Guid.NewGuid(),
+                            ProductName = prod.ProductName,
+                            Language = language,
+                            Rating = prod.Rating,
+                            Pros = prod.Pros,
+                            Cons = prod.Cons,
+                            Summary = prod.Summary,
+                            ExtractedIngredients = prod.ExtractedIngredients
+                        };
+                        models.Add(model);
+                    }
                 }
 
                 return Ok(models);
@@ -474,7 +490,10 @@ namespace SaszetApp.Api.Controllers
             {
                 if (!llmCallCompleted)
                 {
-                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                    foreach (var u in usageEntities)
+                    {
+                        await _scanQuotaService.RefundUsageAsync(u, System.Threading.CancellationToken.None);
+                    }
                 }
                 _logger.LogError(ex, "Error comparing images.");
                 return StatusCode(500, new { message = "Error comparing images." });
