@@ -27,6 +27,10 @@ export default function BottomTabBar() {
         <Camera size={24} strokeWidth={2.5} />
       </button>
 
+      <Link to="/compare" className={clsx("flex flex-col items-center justify-center space-y-1 transition-colors duration-300 w-12", location.pathname.startsWith('/compare') ? "text-[var(--color-primary)]" : "text-gray-400 hover:text-gray-600")} aria-label="Compare Foods">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={location.pathname.startsWith('/compare') ? "2.5" : "2"} strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8"/><path d="m21 3-6 6"/><path d="m3 3 6 6"/><path d="M12 14v-4"/></svg>
+      </Link>
+
       <Link to="/profile" className={clsx("flex flex-col items-center justify-center space-y-1 transition-colors duration-300 w-12", location.pathname === '/profile' ? "text-[var(--color-primary)]" : "text-gray-400 hover:text-gray-600")}>
         <User size={24} strokeWidth={location.pathname === '/profile' ? 2.5 : 2} />
       </Link>

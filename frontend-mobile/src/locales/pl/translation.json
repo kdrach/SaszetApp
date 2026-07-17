@@ -24,5 +24,12 @@
   "chooseFromGallery": "Wybierz z galerii",
   "scan_error": "Błąd skanowania",
   "rate_limit_exceeded": "Przekroczono limit skanowań. Spróbuj ponownie później.",
-  "rate_limit_title": "Limit osiągnięty"
+  "rate_limit_title": "Limit osiągnięty",
+  "compare_title": "Porównaj karmy",
+  "compare_subtitle": "Zrób od 2 do 5 zdjęć składów karm.",
+  "add_photo": "Dodaj",
+  "compare_action": "Porównaj",
+  "consulting_ai_compare": "AI porównuje karmy...",
+  "error_comparing": "Błąd podczas porównywania. Upewnij się, że na zdjęciach są składy karm.",
+  "comparison_results": "Wyniki porównania"
 }

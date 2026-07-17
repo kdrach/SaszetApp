@@ -23,6 +23,13 @@
   "no_pet_food_found": "No pet food found in the photo. Please try again with a clearer shot.",
   "chooseFromGallery": "Choose from gallery",
   "scan_error": "Scan error",
-  "rate_limit_exceeded": "Scan limit exceeded. Please try again later.",
-  "rate_limit_title": "Limit reached"
+  "rate_limit_exceeded": "Scan limit exceeded. Try again later.",
+  "rate_limit_title": "Limit Reached",
+  "compare_title": "Compare Pet Foods",
+  "compare_subtitle": "Take 2 to 5 photos of pet food labels.",
+  "add_photo": "Add",
+  "compare_action": "Compare",
+  "consulting_ai_compare": "AI is comparing products...",
+  "error_comparing": "Error comparing products. Make sure photos contain pet food labels.",
+  "comparison_results": "Comparison Results"
 }

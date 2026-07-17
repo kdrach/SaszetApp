@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import HomeView from './pages/HomeView';
 import ScannerView from './pages/ScannerView';
 import ResultView from './pages/ResultView';
+import CompareCaptureView from './pages/CompareCaptureView';
+import CompareResultView from './pages/CompareResultView';
 import BottomTabBar from './components/BottomTabBar';
 import { useTranslation } from 'react-i18next';
 
@@ -17,6 +19,8 @@ function App() {
             <Route path="/" element={<HomeView />} />
             <Route path="/scan" element={<ScannerView />} />
             <Route path="/product/:id" element={<ResultView />} />
+            <Route path="/compare" element={<CompareCaptureView />} />
+            <Route path="/compare-result" element={<CompareResultView />} />
             <Route path="/profile" element={<div className="p-6 text-center text-gray-500 mt-20">{t('profile_placeholder')}</div>} />
           </Routes>
         </div>

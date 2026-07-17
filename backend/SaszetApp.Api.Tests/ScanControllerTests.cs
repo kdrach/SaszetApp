@@ -313,6 +313,70 @@ namespace SaszetApp.Api.Tests
             _mockScanQuotaService.Verify(s => s.RefundUsageAsync(It.IsAny<UserScanUsageEntity>(), It.IsAny<System.Threading.CancellationToken>()), Times.Once);
         }
 
+        [Fact]
+        public async Task Compare_TooFewImages_ReturnsBadRequest()
+        {
+            var images = new System.Collections.Generic.List<IFormFile> { new Mock<IFormFile>().Object };
+            var result = await _controller.Compare(images, System.Threading.CancellationToken.None);
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Please provide between 2 and 5 images for comparison.", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task Compare_TooManyImages_ReturnsBadRequest()
+        {
+            var mockFile = new Mock<IFormFile>().Object;
+            var images = new System.Collections.Generic.List<IFormFile> { mockFile, mockFile, mockFile, mockFile, mockFile, mockFile };
+            var result = await _controller.Compare(images, System.Threading.CancellationToken.None);
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Please provide between 2 and 5 images for comparison.", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task Compare_ValidImages_CallsVlmService_And_DoesNotCache()
+        {
+            var provider = new LlmProviderEntity { Id = Guid.NewGuid(), ProviderName = "OpenAI", ModelName = "gpt-4-vision", IsPrimary = true, IsActive = true, EncryptedApiKey = "enc-key" };
+            _dbContext.LlmProviders.Add(provider);
+            await _dbContext.SaveChangesAsync();
+
+            var mockFile1 = new Mock<IFormFile>();
+            var content = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==");
+            mockFile1.Setup(f => f.Length).Returns(content.Length);
+            mockFile1.Setup(f => f.ContentType).Returns("image/jpeg");
+            mockFile1.Setup(f => f.OpenReadStream()).Returns(() => new System.IO.MemoryStream(content));
+
+            var mockFile2 = new Mock<IFormFile>();
+            mockFile2.Setup(f => f.Length).Returns(content.Length);
+            mockFile2.Setup(f => f.ContentType).Returns("image/jpeg");
+            mockFile2.Setup(f => f.OpenReadStream()).Returns(() => new System.IO.MemoryStream(content));
+
+            _controller.Request.Headers["Accept-Language"] = "pl-PL";
+
+            var expectedResponse = new SaszetApp.Api.DTOs.MultiVlmResponseContract
+            {
+                Products = new System.Collections.Generic.List<SaszetApp.Api.DTOs.VlmResponseContract>
+                {
+                    new SaszetApp.Api.DTOs.VlmResponseContract { ProductName = "Food A" },
+                    new SaszetApp.Api.DTOs.VlmResponseContract { ProductName = "Food B" }
+                }
+            };
+
+            _mockVlmService
+                .Setup(v => v.AnalyzeMultipleImagesAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<System.Collections.Generic.List<string>>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync(expectedResponse);
+
+            var images = new System.Collections.Generic.List<IFormFile> { mockFile1.Object, mockFile2.Object };
+            var result = await _controller.Compare(images, System.Threading.CancellationToken.None);
+
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var resultList = Assert.IsType<System.Collections.Generic.List<PetFoodItem>>(okResult.Value);
+            Assert.Equal(2, resultList.Count);
+            Assert.Equal("Food A", resultList[0].ProductName);
+            Assert.Equal("Food B", resultList[1].ProductName);
+
+            _mockVlmService.Verify(v => v.AnalyzeMultipleImagesAsync("OpenAI", "gpt-4-vision", "test-key", It.IsAny<System.Collections.Generic.List<string>>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+        }
+
         public void Dispose()
         {
             _dbContext.Database.EnsureDeleted();

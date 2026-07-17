@@ -26,6 +26,9 @@ This is a standard .NET 10.0 ASP.NET Core Web API project using Controllers and 
   - Added `ScanMode` enum to differentiate between Ingredients (OCR focus) and General package (Product recognition focus).
   - Added `[HttpPost("analyze-image")]` endpoint in `ScanController` to process direct photo uploads as base64 memory streams without persistent storage.
   - Adapted `IVlmService` and `VlmService` to construct multimodal payloads using `inlineData` / `image_url` depending on the LLM provider (OpenAI, Anthropic, Gemini).
+- **Compare Multiple Pet Foods (Epic #122)**:
+  - Added `[HttpPost("compare")]` in `ScanController` to handle comparing up to 5 images simultaneously.
+  - Extended `IVlmService` with `AnalyzeMultipleImagesAsync` allowing multi-image prompt injection and returning `MultiVlmResponseContract`.
 - **Bug Fixes (Provider Updates & Testing)**:
   - Added missing `[HttpPut("{id}")]` endpoint in `AdminProviderController` to allow updating existing providers via panel.
   - Updated `TestConnection` logic to explicitly query specific models (e.g., `/models/{ModelName}`) ensuring that entering a random model name results in a connection test failure.
