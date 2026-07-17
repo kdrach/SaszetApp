@@ -71,6 +71,7 @@ namespace SaszetApp.Api.Controllers
                     {
                         p.IsPrimary = false;
                     }
+                    await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
                 }
 
                 if (dto.ApiKey == "KEEP_EXISTING")
@@ -135,6 +136,7 @@ namespace SaszetApp.Api.Controllers
                     {
                         p.IsPrimary = false;
                     }
+                    await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
                 }
 
                 entity.ProviderName = dto.ProviderName;
@@ -176,6 +178,7 @@ namespace SaszetApp.Api.Controllers
                 {
                     p.IsPrimary = false;
                 }
+                await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
 
                 provider.IsPrimary = true;
                 await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);

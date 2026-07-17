@@ -32,6 +32,7 @@ This is a standard .NET 10.0 ASP.NET Core Web API project using Controllers and 
 - **Bug Fixes (Provider Updates & Testing)**:
   - Added missing `[HttpPut("{id}")]` endpoint in `AdminProviderController` to allow updating existing providers via panel.
   - Updated `TestConnection` logic to explicitly query specific models (e.g., `/models/{ModelName}`) ensuring that entering a random model name results in a connection test failure.
+  - Fixed a Postgres unique constraint violation when switching `IsPrimary` LLM providers by splitting `SaveChangesAsync` calls.
 
   - Fixed Gemini API URL generation bug by stripping 'models/' prefix appropriately for both Text and Image payloads.
 - **Security Hotfix (Token Burn)**:
