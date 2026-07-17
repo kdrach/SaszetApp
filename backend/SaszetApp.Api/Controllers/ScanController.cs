@@ -116,6 +116,11 @@ namespace SaszetApp.Api.Controllers
                         llmCallCompleted = true;
                         break;
                     }
+                    catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode >= System.Net.HttpStatusCode.BadRequest && ex.StatusCode < System.Net.HttpStatusCode.InternalServerError)
+                    {
+                        llmCallCompleted = true;
+                        throw;
+                    }
                     catch (Exception ex)
                     {
                         lastException = ex;
@@ -271,6 +276,11 @@ namespace SaszetApp.Api.Controllers
                     {
                         llmCallCompleted = true;
                         throw; // Don't fallback if it's a valid "not food" response
+                    }
+                    catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode >= System.Net.HttpStatusCode.BadRequest && ex.StatusCode < System.Net.HttpStatusCode.InternalServerError)
+                    {
+                        llmCallCompleted = true;
+                        throw;
                     }
                     catch (Exception ex)
                     {

@@ -299,7 +299,7 @@ namespace SaszetApp.Api.Tests
 
             _mockVlmService
                 .Setup(v => v.AnalyzeImageAsync("OpenAI", It.IsAny<string>(), "test-key", It.IsAny<string>(), "image/jpeg", "pl", It.IsAny<System.Threading.CancellationToken>()))
-                .ThrowsAsync(new System.Net.Http.HttpRequestException("429 Too Many Requests", null, System.Net.HttpStatusCode.TooManyRequests));
+                .ThrowsAsync(new System.Net.Http.HttpRequestException("500 Server Error", null, System.Net.HttpStatusCode.InternalServerError));
 
             var result = await _controller.AnalyzeImage(mockFile.Object, System.Threading.CancellationToken.None);
 
