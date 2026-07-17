@@ -33,3 +33,25 @@ export const uploadImageForAnalysis = async (
   
   return response.data;
 };
+
+export const compareProducts = async (
+  images: Blob[],
+  language: string = 'pl',
+  signal?: AbortSignal
+): Promise<VLMResponseContract[]> => {
+  const formData = new FormData();
+  images.forEach((image, index) => {
+    formData.append('images', image, `capture_${index}.jpg`);
+  });
+  
+  const response = await apiClient.post<VLMResponseContract[]>('/Scan/compare', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      'Accept-Language': language
+    },
+    signal,
+    timeout: 300000 // 5 minutes timeout for 5 images comparison
+  });
+  
+  return response.data;
+};

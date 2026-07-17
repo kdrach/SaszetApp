@@ -90,6 +90,29 @@ namespace SaszetApp.Api.Services
             return Sanitize(vlmResponse);
         }
 
+        public async Task<MultiVlmResponseContract> AnalyzeMultipleImagesAsync(string providerName, string modelName, string apiKey, System.Collections.Generic.List<string> base64Images, string mimeType, string language, CancellationToken cancellationToken)
+        {
+            string systemPrompt = $"You are a pet food analyst. The user will provide multiple photos of pet food ingredient labels. " +
+                               $"Compare them and analyze their ingredients. Return ONLY a JSON object exactly matching this structure: " +
+                                $"{{\"products\": [ {{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}} ] }}. " +
+                               $"If an image does not contain pet food packaging, omit it from the products array. " +
+                               $"All text values (except productName) MUST be in the '{language}' language.";
+
+            string jsonResponse = await CallProviderForMultipleImagesAsync(providerName, modelName, apiKey, systemPrompt, base64Images, mimeType, cancellationToken);
+
+            var match = Regex.Match(jsonResponse, @"(?is)```(?:json)?\s*(.*?)\s*```");
+            if (match.Success) jsonResponse = match.Groups[1].Value;
+            jsonResponse = jsonResponse.Trim();
+
+            var multiResponse = JsonSerializer.Deserialize<MultiVlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (multiResponse == null || multiResponse.Products == null) throw new InvalidOperationException("Failed to parse VLM response for multiple images.");
+
+            // Sanitize each product
+            multiResponse.Products = multiResponse.Products.Select(Sanitize).ToList();
+
+            return multiResponse;
+        }
+
         private VlmResponseContract Sanitize(VlmResponseContract response)
         {
             if (response == null) return null;
@@ -285,6 +308,100 @@ namespace SaszetApp.Api.Services
 
             throw new NotSupportedException($"Provider {provider} is not supported.");
         }
+
+        private async Task<string> CallProviderForMultipleImagesAsync(string provider, string model, string apiKey, string systemPrompt, System.Collections.Generic.List<string> base64Images, string mimeType, CancellationToken cancellationToken)
+        {
+            var client = _httpClientFactory.CreateClient();
+            var baseUrl = _configuration[$"LlmEndpoints:{provider}"];
+            
+            if (provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+            {
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+                
+                var userContentParts = new System.Collections.Generic.List<object> { new { type = "text", text = "Analyze these images and compare them." } };
+                foreach (var img in base64Images)
+                {
+                    userContentParts.Add(new { type = "image_url", image_url = new { url = $"data:{mimeType};base64,{img}" } });
+                }
+
+                var requestBody = new
+                {
+                    model = model,
+                    messages = new object[]
+                    {
+                        new { role = "system", content = systemPrompt },
+                        new { role = "user", content = userContentParts.ToArray() }
+                    },
+                    response_format = new { type = "json_object" }
+                };
+
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.openai.com/v1/chat/completions" : $"{baseUrl.TrimEnd('/')}/chat/completions";
+                using var response = await ExecuteWithRetryAsync(() => client.PostAsync(url, new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
+
+                var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var doc = JsonDocument.Parse(responseString);
+                return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "{}";
+            }
+            else if (provider.Equals("Anthropic", StringComparison.OrdinalIgnoreCase))
+            {
+                client.DefaultRequestHeaders.Add("x-api-key", apiKey);
+                client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+                
+                var userContentParts = new System.Collections.Generic.List<object> { new { type = "text", text = "Analyze these images." } };
+                foreach (var img in base64Images)
+                {
+                    userContentParts.Add(new { type = "image", source = new { type = "base64", media_type = mimeType, data = img } });
+                }
+
+                var requestBody = new
+                {
+                    model = model,
+                    max_tokens = 2000,
+                    system = systemPrompt + " You must return ONLY the raw JSON object.",
+                    messages = new object[]
+                    {
+                        new { role = "user", content = userContentParts.ToArray() }
+                    }
+                };
+
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? "https://api.anthropic.com/v1/messages" : $"{baseUrl.TrimEnd('/')}/messages";
+                using var response = await ExecuteWithRetryAsync(() => client.PostAsync(url, new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
+
+                var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var doc = JsonDocument.Parse(responseString);
+                return doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString() ?? "{}";
+            }
+            else if (provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+            {
+                client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
+
+                var userContentParts = new System.Collections.Generic.List<object> { new { text = "Analyze these images." } };
+                foreach (var img in base64Images)
+                {
+                    userContentParts.Add(new { inlineData = new { mimeType = mimeType, data = img } });
+                }
+
+                var requestBody = new
+                {
+                    systemInstruction = new { parts = new[] { new { text = systemPrompt } } },
+                    contents = new[] { new { role = "user", parts = userContentParts.ToArray() } },
+                    generationConfig = new { responseMimeType = "application/json" }
+                };
+                
+                var actualModel = model.StartsWith("models/") ? model.Substring("models/".Length) : model;
+                var encodedModel = System.Net.WebUtility.UrlEncode(actualModel);
+                
+                var url = string.IsNullOrWhiteSpace(baseUrl) ? $"https://generativelanguage.googleapis.com/v1beta/models/{encodedModel}:generateContent" : $"{baseUrl.TrimEnd('/')}/models/{encodedModel}:generateContent";
+                using var response = await ExecuteWithRetryAsync(() => client.PostAsync(url, new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json"), cancellationToken), cancellationToken);
+
+                var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var doc = JsonDocument.Parse(responseString);
+                return doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? "{}";
+            }
+
+            throw new NotSupportedException($"Provider {provider} is not supported.");
+        }
+
         public async Task TestConnectionAsync(string providerName, string modelName, string apiKey, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(apiKey)) 

@@ -116,6 +116,11 @@ namespace SaszetApp.Api.Controllers
                         llmCallCompleted = true;
                         break;
                     }
+                    catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode >= System.Net.HttpStatusCode.BadRequest && ex.StatusCode < System.Net.HttpStatusCode.InternalServerError)
+                    {
+                        llmCallCompleted = true;
+                        throw;
+                    }
                     catch (Exception ex)
                     {
                         lastException = ex;
@@ -272,6 +277,11 @@ namespace SaszetApp.Api.Controllers
                         llmCallCompleted = true;
                         throw; // Don't fallback if it's a valid "not food" response
                     }
+                    catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode >= System.Net.HttpStatusCode.BadRequest && ex.StatusCode < System.Net.HttpStatusCode.InternalServerError)
+                    {
+                        llmCallCompleted = true;
+                        throw;
+                    }
                     catch (Exception ex)
                     {
                         lastException = ex;
@@ -319,6 +329,184 @@ namespace SaszetApp.Api.Controllers
                 }
                 _logger.LogError(ex, "Error analyzing image.");
                 return StatusCode(500, new { message = "Error analyzing image." });
+            }
+        }
+        [HttpPost("compare")]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ScanRatePolicy")]
+        [RequestSizeLimit(25 * 1024 * 1024)] // 25MB total limit for up to 5 images
+        [RequestFormLimits(MultipartBodyLengthLimit = 26214400)]
+        public async Task<IActionResult> Compare([FromForm] System.Collections.Generic.List<IFormFile> images, System.Threading.CancellationToken cancellationToken)
+        {
+            var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+            if (images == null || images.Count < 2 || images.Count > 5)
+            {
+                return BadRequest("Please provide between 2 and 5 images for comparison.");
+            }
+
+            var allowedMimeTypes = new[] { "image/jpeg", "image/png", "image/webp" };
+            var base64Images = new System.Collections.Generic.List<string>();
+
+            var usageEntities = new System.Collections.Generic.List<UserScanUsageEntity>();
+            for (int i = 0; i < images.Count; i++)
+            {
+                var usage = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+                if (usage == null)
+                {
+                    foreach (var u in usageEntities)
+                    {
+                        await _scanQuotaService.RefundUsageAsync(u, cancellationToken);
+                    }
+                    return StatusCode(429, new { message = "You have reached your scan limit." });
+                }
+                usageEntities.Add(usage);
+            }
+
+            try
+            {
+                foreach (var image in images)
+                {
+                    if (image.Length == 0) throw new Exception("Empty image uploaded.");
+                    if (!allowedMimeTypes.Contains(image.ContentType)) throw new Exception("Unsupported image format.");
+                    
+                    using var memoryStream = new MemoryStream();
+                    using var inputStream = image.OpenReadStream();
+                    using var codec = SKCodec.Create(inputStream);
+                    if (codec == null) throw new Exception("Failed to decode image");
+                    if (codec.Info.Width > 2048 || codec.Info.Height > 2048) throw new Exception("Image dimensions too large.");
+                    
+                    inputStream.Position = 0;
+                    
+                    await Task.Run(() =>
+                    {
+                        using var skBitmap = SKBitmap.Decode(inputStream);
+                        if (skBitmap == null) throw new Exception("Failed to decode image");
+                        
+                        using var skImage = SKImage.FromBitmap(skBitmap);
+                        using var data = skImage.Encode(SKEncodedImageFormat.Jpeg, 85);
+                        if (data != null)
+                        {
+                            data.SaveTo(memoryStream);
+                        }
+                        else
+                        {
+                            throw new Exception("Failed to encode image");
+                        }
+                    }, cancellationToken);
+
+                    base64Images.Add(Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length));
+                }
+            }
+            catch (Exception ex)
+            {
+                foreach (var u in usageEntities)
+                {
+                    await _scanQuotaService.RefundUsageAsync(u, cancellationToken);
+                }
+                _logger.LogWarning(ex, "Failed to parse uploaded images.");
+                return BadRequest("Invalid image file(s).");
+            }
+
+            var language = Request.Headers["Accept-Language"].ToString()?.Split(',').FirstOrDefault()?.Trim().ToLower() ?? "pl";
+            if (!language.StartsWith("en") && !language.StartsWith("pl")) language = "pl";
+            else if (language.StartsWith("en")) language = "en";
+            else language = "pl";
+
+            bool llmCallCompleted = false;
+            try
+            {
+                if (!_memoryCache.TryGetValue("LlmFallbackChain", out System.Collections.Generic.List<LlmProviderEntity> fallbackChain))
+                {
+                    var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
+                    if (activeCategory != null)
+                    {
+                        fallbackChain = await _dbContext.LlmProviders
+                            .AsNoTracking()
+                            .Where(p => p.ProviderName == activeCategory && p.IsActive)
+                            .OrderBy(p => p.PriorityOrder)
+                            .ToListAsync(cancellationToken);
+
+                        _memoryCache.Set("LlmFallbackChain", fallbackChain, TimeSpan.FromMinutes(5));
+                    }
+                }
+
+                if (fallbackChain == null || !fallbackChain.Any())
+                {
+                    foreach (var u in usageEntities)
+                    {
+                        await _scanQuotaService.RefundUsageAsync(u, System.Threading.CancellationToken.None);
+                    }
+                    return StatusCode(503, new { message = "No active keys or primary LLM provider configured." });
+                }
+
+                MultiVlmResponseContract result = null;
+                Exception lastException = null;
+
+                foreach (var providerEntity in fallbackChain)
+                {
+                    var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
+                    try
+                    {
+                        result = await _vlmService.AnalyzeMultipleImagesAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Images, "image/jpeg", language, cancellationToken);
+                        llmCallCompleted = true;
+                        break;
+                    }
+                    catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode >= System.Net.HttpStatusCode.BadRequest && ex.StatusCode < System.Net.HttpStatusCode.InternalServerError)
+                    {
+                        llmCallCompleted = true;
+                        lastException = ex;
+                        _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} failed with 4xx for comparison.");
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} failed for comparison. Trying next...");
+                    }
+                }
+
+                if (result == null)
+                {
+                    throw new Exception("All LLM providers in the fallback chain failed.", lastException);
+                }
+
+                var models = new System.Collections.Generic.List<PetFoodItem>();
+                if (result.Products != null)
+                {
+                    foreach (var prod in result.Products)
+                    {
+                        if (prod == null || string.IsNullOrWhiteSpace(prod.ProductName))
+                            continue;
+
+                        var model = new PetFoodItem
+                        {
+                            Id = Guid.NewGuid(),
+                            ProductName = prod.ProductName,
+                            Language = language,
+                            Rating = prod.Rating,
+                            Pros = prod.Pros,
+                            Cons = prod.Cons,
+                            Summary = prod.Summary,
+                            ExtractedIngredients = prod.ExtractedIngredients
+                        };
+                        models.Add(model);
+                    }
+                }
+
+                return Ok(models);
+            }
+            catch (Exception ex)
+            {
+                if (!llmCallCompleted)
+                {
+                    foreach (var u in usageEntities)
+                    {
+                        await _scanQuotaService.RefundUsageAsync(u, System.Threading.CancellationToken.None);
+                    }
+                }
+                _logger.LogError(ex, "Error comparing images.");
+                return StatusCode(500, new { message = "Error comparing images." });
             }
         }
     }
