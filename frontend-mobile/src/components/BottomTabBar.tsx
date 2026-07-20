@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, History, User, Camera, ScanLine, QrCode, X } from 'lucide-react';
+import { Home, History, User, Camera, ScanLine, QrCode, X, Copy } from 'lucide-react';
 import clsx from 'clsx';
 import { useNativeCameraScanner } from '../hooks/useNativeCameraScanner';
 
@@ -52,7 +52,7 @@ export default function BottomTabBar() {
 
         {/* Popover Menu */}
         {isMenuOpen && (
-          <div className="absolute bottom-12 bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col p-2 space-y-2 animate-in slide-in-from-bottom-2 fade-in duration-200 z-40 w-48 -translate-x-1/2 left-1/2">
+          <div className="absolute bottom-24 bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col p-2 space-y-2 animate-in slide-in-from-bottom-2 fade-in duration-200 z-40 w-48 -translate-x-1/2 left-1/2">
              <Link 
                 to="/scan" 
                 onClick={() => setIsMenuOpen(false)}
@@ -78,6 +78,18 @@ export default function BottomTabBar() {
                 </div>
                 <span className="font-medium text-sm">Zdjęcie etykiety</span>
              </button>
+
+             <Link 
+                to="/compare" 
+                onClick={() => setIsMenuOpen(false)}
+                aria-label="Scan Multiple"
+                className="flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-purple-50 text-gray-700 hover:text-purple-600 transition-colors"
+             >
+                <div className="bg-purple-100 p-2 rounded-full text-purple-600">
+                  <Copy size={20} />
+                </div>
+                <span className="font-medium text-sm">Skanuj wiele</span>
+             </Link>
           </div>
         )}
       </div>

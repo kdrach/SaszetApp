@@ -63,10 +63,13 @@ describe('BottomTabBar', () => {
     // Menu items should appear
     expect(screen.getByLabelText('Scan Barcode')).toBeInTheDocument();
     expect(screen.getByLabelText('Take Photo')).toBeInTheDocument();
+    expect(screen.getByLabelText('Scan Multiple')).toBeInTheDocument();
     
     // Clicking again should close it
     fireEvent.click(fabButton);
     expect(screen.queryByLabelText('Scan Barcode')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Take Photo')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Scan Multiple')).not.toBeInTheDocument();
   });
 
   it('does not render anything on /scan route', () => {
