@@ -29,5 +29,10 @@
   - Added dedicated "Ingredients Scan" button to `BottomTabBar` which directly launches native OS camera via hidden file input.
   - Simplified `ScannerView` to solely handle EAN barcode scanning.
 
+- **UI Refactoring (Issue #129)**:
+  - Refactored `BottomTabBar` to use a single centered Floating Action Button (FAB) for scanning.
+  - The FAB opens a popover menu allowing the user to select between "Scan Barcode" or "Take Photo".
+  - Maintained a symmetric layout (Home, History, FAB, Compare, Profile).
+
 - **Bug Fixes (Camera)**:
   - Fixed concurrent camera initialization race conditions caused by React StrictMode and prevented double UI error overlays on denied permissions in ScannerView.
