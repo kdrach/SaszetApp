@@ -1,4 +1,4 @@
-import { render, fireEvent, waitFor } from '@testing-library/react';
+import { render, fireEvent, waitFor, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import BottomTabBar from './BottomTabBar';
@@ -22,7 +22,7 @@ describe('BottomTabBar', () => {
     vi.clearAllMocks();
   });
 
-  it('renders navigation links and scan buttons on home route', () => {
+  it('renders navigation links and main FAB on home route', () => {
     const { container } = render(
       <MemoryRouter initialEntries={['/']}>
         <BottomTabBar />
@@ -30,18 +30,43 @@ describe('BottomTabBar', () => {
     );
     
     const links = container.querySelectorAll('a');
-    expect(links).toHaveLength(3); // Home, EAN Scan, Profile
+    // Home, History, Compare, Profile
+    expect(links).toHaveLength(4); 
     expect(links[0].getAttribute('href')).toBe('/');
-    expect(links[1].getAttribute('href')).toBe('/scan');
-    expect(links[2].getAttribute('href')).toBe('/profile');
+    expect(links[1].getAttribute('href')).toBe('/history');
+    expect(links[2].getAttribute('href')).toBe('/compare');
+    expect(links[3].getAttribute('href')).toBe('/profile');
     
     // There should be a hidden file input
     const fileInput = document.querySelector('input[type="file"]');
     expect(fileInput).toBeInTheDocument();
     
-    // There should be a button to trigger the camera (ingredients scan)
-    const cameraButton = container.querySelector('button[aria-label="Scan Ingredients"]');
-    expect(cameraButton).toBeInTheDocument();
+    // There should be a main FAB to toggle scan menu
+    const fabButton = screen.getByLabelText('Toggle Scan Menu');
+    expect(fabButton).toBeInTheDocument();
+    
+    // The menu should not be visible initially
+    expect(screen.queryByLabelText('Scan Barcode')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Take Photo')).not.toBeInTheDocument();
+  });
+
+  it('toggles scan menu when FAB is clicked', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <BottomTabBar />
+      </MemoryRouter>
+    );
+    
+    const fabButton = screen.getByLabelText('Toggle Scan Menu');
+    fireEvent.click(fabButton);
+    
+    // Menu items should appear
+    expect(screen.getByLabelText('Scan Barcode')).toBeInTheDocument();
+    expect(screen.getByLabelText('Take Photo')).toBeInTheDocument();
+    
+    // Clicking again should close it
+    fireEvent.click(fabButton);
+    expect(screen.queryByLabelText('Scan Barcode')).not.toBeInTheDocument();
   });
 
   it('does not render anything on /scan route', () => {
@@ -54,8 +79,8 @@ describe('BottomTabBar', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('triggers file input click when camera button is clicked', () => {
-    const { container } = render(
+  it('triggers file input click when Take Photo is clicked', () => {
+    render(
       <MemoryRouter initialEntries={['/']}>
         <BottomTabBar />
       </MemoryRouter>
@@ -64,10 +89,12 @@ describe('BottomTabBar', () => {
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     const clickSpy = vi.spyOn(fileInput, 'click');
     
-    const cameraButton = container.querySelector('button[aria-label="Scan Ingredients"]');
-    if (cameraButton) {
-      fireEvent.click(cameraButton);
-    }
+    // Open menu
+    fireEvent.click(screen.getByLabelText('Toggle Scan Menu'));
+    
+    // Click Take Photo
+    const photoButton = screen.getByLabelText('Take Photo');
+    fireEvent.click(photoButton);
     
     expect(clickSpy).toHaveBeenCalled();
   });
@@ -84,8 +111,6 @@ describe('BottomTabBar', () => {
     
     fireEvent.change(fileInput, { target: { files: [testFile] } });
     
-    // Assert e.target.value was cleared (although testing synthetic events this way is tricky,
-    // the value property is what's accessed in component)
     expect(fileInput.value).toBe('');
     
     await waitFor(() => {
