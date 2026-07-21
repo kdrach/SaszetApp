@@ -74,36 +74,40 @@ namespace SaszetApp.Api.Services
                 }
             }
 
-            using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
-            try
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                var catCount = await _dbContext.Cats.CountAsync(c => c.UserId == userId, cancellationToken);
-                if (catCount >= 20)
+                using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+                try
                 {
-                    throw new InvalidOperationException("Maximum number of cats reached.");
+                    var catCount = await _dbContext.Cats.CountAsync(c => c.UserId == userId, cancellationToken);
+                    if (catCount >= 20)
+                    {
+                        throw new InvalidOperationException("Maximum number of cats reached.");
+                    }
+
+                    var catEntity = new CatEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = userId,
+                        Name = dto.Name,
+                        Breed = dto.Breed,
+                        Weight = dto.Weight,
+                        Allergies = dto.Allergies
+                    };
+
+                    _dbContext.Cats.Add(catEntity);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+
+                    return _mapper.MapToCat(catEntity);
                 }
-
-                var catEntity = new CatEntity
+                catch
                 {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    Name = dto.Name,
-                    Breed = dto.Breed,
-                    Weight = dto.Weight,
-                    Allergies = dto.Allergies
-                };
-
-                _dbContext.Cats.Add(catEntity);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-
-                return _mapper.MapToCat(catEntity);
-            }
-            catch
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw;
+                }
+            });
         }
 
         public async Task<bool> DeleteCatAsync(string userId, Guid catId, CancellationToken cancellationToken)
