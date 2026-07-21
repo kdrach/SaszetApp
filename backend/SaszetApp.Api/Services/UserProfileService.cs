@@ -77,6 +77,7 @@ namespace SaszetApp.Api.Services
             var strategy = _dbContext.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
+                _dbContext.ChangeTracker.Clear();
                 using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
                 try
                 {
