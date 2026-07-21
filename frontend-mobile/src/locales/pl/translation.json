@@ -40,5 +40,7 @@
   "allergies": "Alergie",
   "name": "Imię",
   "save": "Zapisz",
-  "cancel": "Anuluj"
+  "cancel": "Anuluj",
+  "noCatsAdded": "Brak dodanych kotów.",
+  "yourCats": "Twoje koty"
 }

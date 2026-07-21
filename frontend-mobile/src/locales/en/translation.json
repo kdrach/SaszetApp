@@ -40,5 +40,7 @@
   "allergies": "Allergies",
   "name": "Name",
   "save": "Save",
-  "cancel": "Cancel"
+  "cancel": "Cancel",
+  "noCatsAdded": "No cats added.",
+  "yourCats": "Your Cats"
 }

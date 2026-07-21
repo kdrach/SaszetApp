@@ -18,6 +18,7 @@ const ProfileView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [newCat, setNewCat] = useState<CatCreateDto>({
     name: '',
@@ -32,10 +33,12 @@ const ProfileView: React.FC = () => {
 
   const fetchProfile = async () => {
     try {
+      setError(null);
       const data = await profileApi.getProfile();
       setProfile(data);
-    } catch (error) {
-      console.error(error);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to load profile');
     } finally {
       setLoading(false);
     }
@@ -45,6 +48,7 @@ const ProfileView: React.FC = () => {
     e.preventDefault();
     if (!newCat.name || !newCat.breed) return;
     setIsAdding(true);
+    setError(null);
     try {
       const addedCat = await profileApi.addCat(newCat);
       if (profile) {
@@ -55,8 +59,9 @@ const ProfileView: React.FC = () => {
       }
       setIsModalOpen(false);
       setNewCat({ name: '', breed: '', weight: 0, allergies: '' });
-    } catch (error) {
-      console.error(error);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to add cat');
     } finally {
       setIsAdding(false);
     }
@@ -64,6 +69,7 @@ const ProfileView: React.FC = () => {
 
   const handleDeleteCat = async (id: string) => {
     try {
+      setError(null);
       await profileApi.deleteCat(id);
       if (profile) {
         setProfile({
@@ -71,12 +77,13 @@ const ProfileView: React.FC = () => {
           cats: profile.cats.filter((c) => c.id !== id)
         });
       }
-    } catch (error) {
-      console.error(error);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to delete cat');
     }
   };
 
-  if (loading || !profile) {
+  if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center pt-20">
         <Loader2 className="w-10 h-10 animate-spin text-emerald-500 mb-4" />
@@ -84,6 +91,21 @@ const ProfileView: React.FC = () => {
       </div>
     );
   }
+
+  if (error && !profile) {
+    return (
+      <div className="flex-1 px-4 pt-12 pb-32">
+        <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-8">
+          {t('yourProfile')}
+        </h1>
+        <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile) return null;
 
   const scansPercentage = Math.max(0, Math.min(100, (profile.remainingScans / MAX_SCANS) * 100));
   const isWarningState = scansPercentage <= WARNING_THRESHOLD_PERCENTAGE;
@@ -94,6 +116,12 @@ const ProfileView: React.FC = () => {
       <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-8">
         {t('yourProfile')}
       </h1>
+
+      {error && (
+        <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6">
+          {error}
+        </div>
+      )}
 
       {/* Quota Card */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8 relative overflow-hidden">
@@ -115,7 +143,7 @@ const ProfileView: React.FC = () => {
       </div>
 
       {/* Cats Section */}
-      <h2 className="text-xl font-bold text-gray-900 mb-4">{t('addCat').replace('+', '').replace('Dodaj kota', 'Twoje koty').replace('Add a cat', 'Your Cats') /* Quick hack since we lack a specific key for 'Your Cats' */}</h2>
+      <h2 className="text-xl font-bold text-gray-900 mb-4">{t('yourCats')}</h2>
       
       {profile.cats.length > 0 ? (
         <ul className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-100">
@@ -143,7 +171,7 @@ const ProfileView: React.FC = () => {
         </ul>
       ) : (
         <div className="text-center py-8 bg-white rounded-2xl shadow-sm border border-gray-100 text-gray-500">
-          Brak dodanych kotów.
+          {t('noCatsAdded')}
         </div>
       )}
 
