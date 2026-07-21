@@ -83,11 +83,11 @@ const ProfileView: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (loading || !profile) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center pt-20">
         <Loader2 className="w-10 h-10 animate-spin text-emerald-500 mb-4" />
-        <p className="text-gray-500">{t('loadingReading') || 'Loading...'}</p>
+        <p className="text-gray-500">{t('loadingReading')}</p>
       </div>
     );
   }
