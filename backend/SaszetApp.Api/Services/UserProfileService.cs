@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -54,14 +54,35 @@ namespace SaszetApp.Api.Services
             return _mapper.MapToUser(userEntity, remainingScans);
         }
 
-        private static readonly ConcurrentDictionary<string, SemaphoreSlim> _userLocks = new();
+        private class RefCountedSemaphore
+        {
+            public SemaphoreSlim Semaphore { get; } = new SemaphoreSlim(1, 1);
+            public int RefCount { get; set; }
+        }
+
+        private static readonly Dictionary<string, RefCountedSemaphore> _userLocks = new();
 
         public async Task<Cat> AddCatAsync(string userId, CatCreateDto dto, CancellationToken cancellationToken)
         {
-            var semaphore = _userLocks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
-            await semaphore.WaitAsync(cancellationToken);
+            RefCountedSemaphore userLock;
+            lock (_userLocks)
+            {
+                if (!_userLocks.TryGetValue(userId, out userLock))
+                {
+                    userLock = new RefCountedSemaphore { RefCount = 1 };
+                    _userLocks[userId] = userLock;
+                }
+                else
+                {
+                    userLock.RefCount++;
+                }
+            }
+
+            bool lockAcquired = false;
             try
             {
+                await userLock.Semaphore.WaitAsync(cancellationToken);
+                lockAcquired = true;
                 var catCount = await _dbContext.Cats.CountAsync(c => c.UserId == userId, cancellationToken);
                 if (catCount >= 20)
                 {
@@ -111,7 +132,19 @@ namespace SaszetApp.Api.Services
             }
             finally
             {
-                semaphore.Release();
+                if (lockAcquired)
+                {
+                    userLock.Semaphore.Release();
+                }
+                lock (_userLocks)
+                {
+                    userLock.RefCount--;
+                    if (userLock.RefCount == 0)
+                    {
+                        _userLocks.Remove(userId);
+                        userLock.Semaphore.Dispose();
+                    }
+                }
             }
         }
 
