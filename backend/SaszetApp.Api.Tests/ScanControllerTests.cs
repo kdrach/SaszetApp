@@ -266,6 +266,10 @@ namespace SaszetApp.Api.Tests
         [Fact]
         public async Task AnalyzeImage_MalformedImage_RefundsQuota_AndReturnsBadRequest()
         {
+            var provider = new LlmProviderEntity { Id = Guid.NewGuid(), ProviderName = "OpenAI", ModelName = "gpt-4-vision", IsPrimary = true, IsActive = true, EncryptedApiKey = "enc-key" };
+            _dbContext.LlmProviders.Add(provider);
+            await _dbContext.SaveChangesAsync();
+
             var mockFile = new Mock<IFormFile>();
             var content = System.Text.Encoding.UTF8.GetBytes("not a real image");
             mockFile.Setup(f => f.Length).Returns(content.Length);
@@ -467,6 +471,102 @@ namespace SaszetApp.Api.Tests
             // Should only contain the valid one
             Assert.Single(resultList);
             Assert.Equal("Valid Food", resultList[0].ProductName);
+        }
+
+        [Fact]
+        public async Task Search_WithCats_CallsPersonalizeAnalysisAsync()
+        {
+            // Arrange
+            var provider = new LlmProviderEntity { Id = Guid.NewGuid(), ProviderName = "OpenAI", ModelName = "gpt-4", IsPrimary = true, IsActive = true, EncryptedApiKey = "enc-key" };
+            _dbContext.LlmProviders.Add(provider);
+
+            var cat = new CatEntity
+            {
+                Id = Guid.NewGuid(),
+                UserId = "test-user-id",
+                Name = "Filemon",
+                Allergies = new System.Collections.Generic.List<string> { "Chicken" }
+            };
+            _dbContext.Cats.Add(cat);
+            await _dbContext.SaveChangesAsync();
+
+            _controller.Request.Headers["Accept-Language"] = "en-US";
+            var genericModel = new SaszetApp.Api.DTOs.VlmResponseContract
+            {
+                ProductName = "Generic Food",
+                Rating = 5,
+                Pros = new System.Collections.Generic.List<string>(),
+                Cons = new System.Collections.Generic.List<string>(),
+                Summary = "Summary",
+                ExtractedIngredients = "Ingredients"
+            };
+            
+            var personalizedModel = new SaszetApp.Api.DTOs.VlmResponseContract
+            {
+                ProductName = "Generic Food",
+                Rating = 2,
+                Pros = new System.Collections.Generic.List<string>(),
+                Cons = new System.Collections.Generic.List<string> { "Contains chicken, dangerous for Filemon" },
+                Summary = "Personalized Summary",
+                ExtractedIngredients = "Ingredients"
+            };
+
+            _mockVlmService
+                .Setup(v => v.AnalyzeProductAsync("OpenAI", "gpt-4", "test-key", "9999", "en", It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync(genericModel);
+
+            _mockVlmService
+                .Setup(v => v.PersonalizeAnalysisAsync("OpenAI", "gpt-4", "test-key", genericModel, "Cats: Name: Filemon, Allergies: Chicken", "en", It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync(personalizedModel);
+
+            // Act
+            var result = await _controller.Search("9999", System.Threading.CancellationToken.None);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var model = Assert.IsType<PetFoodItem>(okResult.Value);
+            Assert.Equal("Generic Food", model.ProductName);
+            Assert.Equal(2, model.Rating); // personalized rating
+            Assert.Contains("Contains chicken, dangerous for Filemon", model.Cons);
+
+            _mockVlmService.Verify(v => v.AnalyzeProductAsync("OpenAI", "gpt-4", "test-key", "9999", "en", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+            _mockVlmService.Verify(v => v.PersonalizeAnalysisAsync("OpenAI", "gpt-4", "test-key", genericModel, "Cats: Name: Filemon, Allergies: Chicken", "en", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task Search_NoCats_DoesNotCallPersonalizeAnalysisAsync()
+        {
+            // Arrange
+            var provider = new LlmProviderEntity { Id = Guid.NewGuid(), ProviderName = "OpenAI", ModelName = "gpt-4", IsPrimary = true, IsActive = true, EncryptedApiKey = "enc-key" };
+            _dbContext.LlmProviders.Add(provider);
+            await _dbContext.SaveChangesAsync();
+
+            _controller.Request.Headers["Accept-Language"] = "en-US";
+            var genericModel = new SaszetApp.Api.DTOs.VlmResponseContract
+            {
+                ProductName = "Generic Food",
+                Rating = 5,
+                Pros = new System.Collections.Generic.List<string>(),
+                Cons = new System.Collections.Generic.List<string>(),
+                Summary = "Summary",
+                ExtractedIngredients = "Ingredients"
+            };
+
+            _mockVlmService
+                .Setup(v => v.AnalyzeProductAsync("OpenAI", "gpt-4", "test-key", "9999", "en", It.IsAny<System.Threading.CancellationToken>()))
+                .ReturnsAsync(genericModel);
+
+            // Act
+            var result = await _controller.Search("9999", System.Threading.CancellationToken.None);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var model = Assert.IsType<PetFoodItem>(okResult.Value);
+            Assert.Equal("Generic Food", model.ProductName);
+            Assert.Equal(5, model.Rating);
+
+            _mockVlmService.Verify(v => v.AnalyzeProductAsync("OpenAI", "gpt-4", "test-key", "9999", "en", It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+            _mockVlmService.Verify(v => v.PersonalizeAnalysisAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<SaszetApp.Api.DTOs.VlmResponseContract>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<System.Threading.CancellationToken>()), Times.Never);
         }
 
         public void Dispose()

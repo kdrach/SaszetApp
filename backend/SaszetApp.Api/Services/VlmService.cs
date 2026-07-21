@@ -113,6 +113,33 @@ namespace SaszetApp.Api.Services
             return multiResponse;
         }
 
+        public async Task<VlmResponseContract> PersonalizeAnalysisAsync(string providerName, string modelName, string apiKey, VlmResponseContract genericResult, string userProfileContext, string language, CancellationToken cancellationToken)
+        {
+            var genericResultJson = JsonSerializer.Serialize(genericResult, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            var systemPrompt = $"You are a pet food analyst. The user has provided an objective, generic analysis of a pet food product and their pet's profile context. " +
+                               $"Your task is to rewrite the analysis to personalize it based on the pet's profile. " +
+                               $"Warn about any allergens if present in the product's ingredients based on the pet's allergies. " +
+                               $"Return ONLY a JSON object exactly matching this structure: " +
+                                $"{{\"productName\": \"...\", \"rating\": 8, \"pros\": [\"...\"], \"cons\": [\"...\"], \"summary\": \"...\", \"extractedIngredients\": \"...\"}}. " +
+                               $"All text values (except productName) MUST be in the '{language}' language.";
+            var userPrompt = $"Generic Analysis:\n{genericResultJson}\n\nPet Profile Context:\n{userProfileContext}";
+
+            string jsonResponse = await CallProviderAsync(providerName, modelName, apiKey, systemPrompt, userPrompt, cancellationToken);
+
+            var match = Regex.Match(jsonResponse, @"(?is)```(?:json)?\s*(.*?)\s*```");
+            if (match.Success) 
+            {
+                jsonResponse = match.Groups[1].Value;
+            }
+            
+            jsonResponse = jsonResponse.Trim();
+
+            var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (vlmResponse == null) throw new InvalidOperationException("Failed to parse VLM response.");
+
+            return Sanitize(vlmResponse);
+        }
+
         private VlmResponseContract Sanitize(VlmResponseContract response)
         {
             if (response == null) return null;
