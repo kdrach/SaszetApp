@@ -44,6 +44,7 @@ namespace SaszetApp.Api.Services
                     {
                         userEntry.State = EntityState.Detached;
                     }
+                    userEntity = await _dbContext.Users.Include(u => u.Cats).FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
                 }
             }
 
