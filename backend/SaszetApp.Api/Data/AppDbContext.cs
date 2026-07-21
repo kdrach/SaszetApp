@@ -86,6 +86,9 @@ namespace SaszetApp.Api.Data
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.UserId);
                 entity.Property(e => e.Allergies).HasColumnType("jsonb");
+                entity.Property(e => e.Name).HasMaxLength(100);
+                entity.Property(e => e.Breed).HasMaxLength(100);
+                entity.Property(e => e.Weight).HasPrecision(5, 2);
             });
         }
     }
