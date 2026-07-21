@@ -31,5 +31,14 @@
   "compare_action": "Compare",
   "consulting_ai_compare": "AI is comparing products...",
   "error_comparing": "Error comparing products. Make sure photos contain pet food labels.",
-  "comparison_results": "Comparison Results"
+  "comparison_results": "Comparison Results",
+  "yourProfile": "Your Profile",
+  "remainingScans": "Remaining AI scans",
+  "addCat": "Add a cat",
+  "breed": "Breed",
+  "weight": "Weight (kg)",
+  "allergies": "Allergies",
+  "name": "Name",
+  "save": "Save",
+  "cancel": "Cancel"
 }

@@ -31,5 +31,14 @@
   "compare_action": "Porównaj",
   "consulting_ai_compare": "AI porównuje karmy...",
   "error_comparing": "Błąd podczas porównywania. Upewnij się, że na zdjęciach są składy karm.",
-  "comparison_results": "Wyniki porównania"
+  "comparison_results": "Wyniki porównania",
+  "yourProfile": "Twój Profil",
+  "remainingScans": "Pozostało skanowań AI",
+  "addCat": "Dodaj kota",
+  "breed": "Rasa",
+  "weight": "Waga (kg)",
+  "allergies": "Alergie",
+  "name": "Imię",
+  "save": "Zapisz",
+  "cancel": "Anuluj"
 }

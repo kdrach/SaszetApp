@@ -4,13 +4,11 @@ import ScannerView from './pages/ScannerView';
 import ResultView from './pages/ResultView';
 import CompareCaptureView from './pages/CompareCaptureView';
 import CompareResultView from './pages/CompareResultView';
+import ProfileView from './pages/ProfileView';
 import BottomTabBar from './components/BottomTabBar';
-import { useTranslation } from 'react-i18next';
 
 
 function App() {
-  const { t } = useTranslation();
-
   return (
     <BrowserRouter>
       <div className="flex flex-col min-h-screen bg-[var(--color-background)]">
@@ -21,7 +19,7 @@ function App() {
             <Route path="/product/:id" element={<ResultView />} />
             <Route path="/compare" element={<CompareCaptureView />} />
             <Route path="/compare-result" element={<CompareResultView />} />
-            <Route path="/profile" element={<div className="p-6 text-center text-gray-500 mt-20">{t('profile_placeholder')}</div>} />
+            <Route path="/profile" element={<ProfileView />} />
           </Routes>
         </div>
         <BottomTabBar />
