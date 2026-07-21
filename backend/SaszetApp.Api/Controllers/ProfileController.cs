@@ -48,7 +48,13 @@ namespace SaszetApp.Api.Controllers
             {
                 userEntity = new UserEntity { Id = userId };
                 _dbContext.Users.Add(userEntity);
-                await _dbContext.SaveChangesAsync(cancellationToken);
+                try
+                {
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+                catch (DbUpdateException)
+                {
+                }
             }
 
             var remainingScans = await _scanQuotaService.GetRemainingScansAsync(userId, cancellationToken);
@@ -63,11 +69,16 @@ namespace SaszetApp.Api.Controllers
         {
             var userId = GetUserId();
 
+            var catCount = await _dbContext.Cats.CountAsync(c => c.UserId == userId, cancellationToken);
+            if (catCount >= 20)
+            {
+                return BadRequest("Maximum number of cats reached.");
+            }
+
             var userExists = await _dbContext.Users.AnyAsync(u => u.Id == userId, cancellationToken);
             if (!userExists)
             {
                 _dbContext.Users.Add(new UserEntity { Id = userId });
-                await _dbContext.SaveChangesAsync(cancellationToken);
             }
 
             var catEntity = new CatEntity
@@ -81,7 +92,21 @@ namespace SaszetApp.Api.Controllers
             };
 
             _dbContext.Cats.Add(catEntity);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            
+            if (!userExists)
+            {
+                try
+                {
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+                catch (DbUpdateException)
+                {
+                }
+            }
+            else
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
 
             var catModel = _mapper.MapToCat(catEntity);
 

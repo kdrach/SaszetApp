@@ -1,0 +1,216 @@
+﻿diff --git a/frontend-mobile/README_AI.md b/frontend-mobile/README_AI.md
+index 5f5021c..c564154 100644
+--- a/frontend-mobile/README_AI.md
++++ b/frontend-mobile/README_AI.md
+@@ -28,6 +28,11 @@
+   - Removed custom "Photo Mode" bottom sheet from `ScannerView`.
+   - Added dedicated "Ingredients Scan" button to `BottomTabBar` which directly launches native OS camera via hidden file input.
+   - Simplified `ScannerView` to solely handle EAN barcode scanning.
+-
+-- **Bug Fixes (Camera)**:
+-  - Fixed concurrent camera initialization race conditions caused by React StrictMode and prevented double UI error overlays on denied permissions in ScannerView.
++
++- **UI Refactoring (Issue #129)**:
++  - Refactored `BottomTabBar` to use a single centered Floating Action Button (FAB) for scanning.
++  - The FAB opens a popover menu allowing the user to select between "Scan Barcode" or "Take Photo".
++  - Maintained a symmetric layout (Home, History, FAB, Compare, Profile).
++
++- **Bug Fixes (Camera)**:
++  - Fixed concurrent camera initialization race conditions caused by React StrictMode and prevented double UI error overlays on denied permissions in ScannerView.
+diff --git a/frontend-mobile/src/components/BottomTabBar.test.tsx b/frontend-mobile/src/components/BottomTabBar.test.tsx
+index cf8a382..6d35730 100644
+--- a/frontend-mobile/src/components/BottomTabBar.test.tsx
++++ b/frontend-mobile/src/components/BottomTabBar.test.tsx
+@@ -1,4 +1,4 @@
+-import { render, fireEvent, waitFor } from '@testing-library/react';
++import { render, fireEvent, waitFor, screen } from '@testing-library/react';
+ import { MemoryRouter } from 'react-router-dom';
+ import { describe, it, expect, vi, beforeEach } from 'vitest';
+ import BottomTabBar from './BottomTabBar';
+@@ -22,7 +22,7 @@ describe('BottomTabBar', () => {
+     vi.clearAllMocks();
+   });
+ 
+-  it('renders navigation links and scan buttons on home route', () => {
++  it('renders navigation links and main FAB on home route', () => {
+     const { container } = render(
+       <MemoryRouter initialEntries={['/']}>
+         <BottomTabBar />
+@@ -30,18 +30,43 @@ describe('BottomTabBar', () => {
+     );
+     
+     const links = container.querySelectorAll('a');
+-    expect(links).toHaveLength(3); // Home, EAN Scan, Profile
++    // Home, History, Compare, Profile
++    expect(links).toHaveLength(4); 
+     expect(links[0].getAttribute('href')).toBe('/');
+-    expect(links[1].getAttribute('href')).toBe('/scan');
+-    expect(links[2].getAttribute('href')).toBe('/profile');
++    expect(links[1].getAttribute('href')).toBe('/history');
++    expect(links[2].getAttribute('href')).toBe('/compare');
++    expect(links[3].getAttribute('href')).toBe('/profile');
+     
+     // There should be a hidden file input
+     const fileInput = document.querySelector('input[type="file"]');
+     expect(fileInput).toBeInTheDocument();
+     
+-    // There should be a button to trigger the camera (ingredients scan)
+-    const cameraButton = container.querySelector('button[aria-label="Scan Ingredients"]');
+-    expect(cameraButton).toBeInTheDocument();
++    // There should be a main FAB to toggle scan menu
++    const fabButton = screen.getByLabelText('Toggle Scan Menu');
++    expect(fabButton).toBeInTheDocument();
++    
++    // The menu should not be visible initially
++    expect(screen.queryByLabelText('Scan Barcode')).not.toBeInTheDocument();
++    expect(screen.queryByLabelText('Take Photo')).not.toBeInTheDocument();
++  });
++
++  it('toggles scan menu when FAB is clicked', () => {
++    render(
++      <MemoryRouter initialEntries={['/']}>
++        <BottomTabBar />
++      </MemoryRouter>
++    );
++    
++    const fabButton = screen.getByLabelText('Toggle Scan Menu');
++    fireEvent.click(fabButton);
++    
++    // Menu items should appear
++    expect(screen.getByLabelText('Scan Barcode')).toBeInTheDocument();
++    expect(screen.getByLabelText('Take Photo')).toBeInTheDocument();
++    
++    // Clicking again should close it
++    fireEvent.click(fabButton);
++    expect(screen.queryByLabelText('Scan Barcode')).not.toBeInTheDocument();
+   });
+ 
+   it('does not render anything on /scan route', () => {
+@@ -54,8 +79,8 @@ describe('BottomTabBar', () => {
+     expect(container).toBeEmptyDOMElement();
+   });
+ 
+-  it('triggers file input click when camera button is clicked', () => {
+-    const { container } = render(
++  it('triggers file input click when Take Photo is clicked', () => {
++    render(
+       <MemoryRouter initialEntries={['/']}>
+         <BottomTabBar />
+       </MemoryRouter>
+@@ -64,10 +89,12 @@ describe('BottomTabBar', () => {
+     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+     const clickSpy = vi.spyOn(fileInput, 'click');
+     
+-    const cameraButton = container.querySelector('button[aria-label="Scan Ingredients"]');
+-    if (cameraButton) {
+-      fireEvent.click(cameraButton);
+-    }
++    // Open menu
++    fireEvent.click(screen.getByLabelText('Toggle Scan Menu'));
++    
++    // Click Take Photo
++    const photoButton = screen.getByLabelText('Take Photo');
++    fireEvent.click(photoButton);
+     
+     expect(clickSpy).toHaveBeenCalled();
+   });
+@@ -84,8 +111,6 @@ describe('BottomTabBar', () => {
+     
+     fireEvent.change(fileInput, { target: { files: [testFile] } });
+     
+-    // Assert e.target.value was cleared (although testing synthetic events this way is tricky,
+-    // the value property is what's accessed in component)
+     expect(fileInput.value).toBe('');
+     
+     await waitFor(() => {
+diff --git a/frontend-mobile/src/components/BottomTabBar.tsx b/frontend-mobile/src/components/BottomTabBar.tsx
+index a65a9eb..4afec1a 100644
+--- a/frontend-mobile/src/components/BottomTabBar.tsx
++++ b/frontend-mobile/src/components/BottomTabBar.tsx
+@@ -1,12 +1,27 @@
+-
++import { useState, useRef, useEffect } from 'react';
+ import { Link, useLocation } from 'react-router-dom';
+-import { Home, ScanLine, User, Camera } from 'lucide-react';
++import { Home, History, User, Camera, ScanLine, QrCode, X } from 'lucide-react';
+ import clsx from 'clsx';
+ import { useNativeCameraScanner } from '../hooks/useNativeCameraScanner';
+ 
+ export default function BottomTabBar() {
+   const location = useLocation();
+   const { fileInputRef, triggerCamera, handleFileChange } = useNativeCameraScanner();
++  const [isMenuOpen, setIsMenuOpen] = useState(false);
++  const menuRef = useRef<HTMLDivElement>(null);
++
++  // Close menu if clicked outside
++  useEffect(() => {
++    function handleClickOutside(event: MouseEvent) {
++      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
++        setIsMenuOpen(false);
++      }
++    }
++    document.addEventListener("mousedown", handleClickOutside);
++    return () => {
++      document.removeEventListener("mousedown", handleClickOutside);
++    };
++  }, [menuRef]);
+ 
+   // Hide bottom tab bar on the immersive scanner view
+   if (location.pathname === '/scan') {
+@@ -19,13 +34,51 @@ export default function BottomTabBar() {
+         <Home size={24} strokeWidth={location.pathname === '/' ? 2.5 : 2} />
+       </Link>
+ 
+-      <Link to="/scan" className="relative -top-5 flex flex-col items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-[var(--color-primary)] to-emerald-400 text-white shadow-lg shadow-emerald-500/40 hover:scale-105 transition-transform duration-300" aria-label="Scan Barcode">
+-        <ScanLine size={24} strokeWidth={2.5} />
++      <Link to="/history" className={clsx("flex flex-col items-center justify-center space-y-1 transition-colors duration-300 w-12", location.pathname === '/history' ? "text-[var(--color-primary)]" : "text-gray-400 hover:text-gray-600")}>
++        <History size={24} strokeWidth={location.pathname === '/history' ? 2.5 : 2} />
+       </Link>
+ 
+-      <button onClick={triggerCamera} className="relative -top-5 flex flex-col items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-blue-500 to-cyan-400 text-white shadow-lg shadow-blue-500/40 hover:scale-105 transition-transform duration-300" aria-label="Scan Ingredients">
+-        <Camera size={24} strokeWidth={2.5} />
+-      </button>
++      {/* Center FAB */}
++      <div className="relative flex flex-col items-center justify-center" ref={menuRef}>
++        <button 
++          onClick={() => setIsMenuOpen(!isMenuOpen)}
++          aria-label="Toggle Scan Menu"
++          className="relative -top-5 flex flex-col items-center justify-center w-14 h-14 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 hover:scale-105 transition-transform duration-300 z-50"
++        >
++          {isMenuOpen ? <X size={24} strokeWidth={2.5} /> : <QrCode size={24} strokeWidth={2.5} />}
++        </button>
++
++        {/* Popover Menu */}
++        {isMenuOpen && (
++          <div className="absolute bottom-12 bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col p-2 space-y-2 animate-in slide-in-from-bottom-2 fade-in duration-200 z-40 w-48 -translate-x-1/2 left-1/2">
++             <Link 
++                to="/scan" 
++                onClick={() => setIsMenuOpen(false)}
++                aria-label="Scan Barcode"
++                className="flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-emerald-50 text-gray-700 hover:text-emerald-600 transition-colors"
++             >
++                <div className="bg-emerald-100 p-2 rounded-full text-emerald-600">
++                  <ScanLine size={20} />
++                </div>
++                <span className="font-medium text-sm">Zeskanuj kod EAN</span>
++             </Link>
++             
++             <button 
++                onClick={() => {
++                  triggerCamera();
++                  setIsMenuOpen(false);
++                }}
++                aria-label="Take Photo"
++                className="flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-blue-50 text-gray-700 hover:text-blue-600 transition-colors w-full text-left"
++             >
++                <div className="bg-blue-100 p-2 rounded-full text-blue-600">
++                  <Camera size={20} />
++                </div>
++                <span className="font-medium text-sm">Zdj─Öcie etykiety</span>
++             </button>
++          </div>
++        )}
++      </div>
+ 
+       <Link to="/compare" className={clsx("flex flex-col items-center justify-center space-y-1 transition-colors duration-300 w-12", location.pathname.startsWith('/compare') ? "text-[var(--color-primary)]" : "text-gray-400 hover:text-gray-600")} aria-label="Compare Foods">
+         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={location.pathname.startsWith('/compare') ? "2.5" : "2"} strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8"/><path d="m21 3-6 6"/><path d="m3 3 6 6"/><path d="M12 14v-4"/></svg>

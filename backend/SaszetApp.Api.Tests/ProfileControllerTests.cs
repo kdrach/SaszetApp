@@ -124,5 +124,31 @@ namespace SaszetApp.Api.Tests
             var catInDb = await _dbContext.Cats.FirstOrDefaultAsync(c => c.Id == catId);
             Assert.Null(catInDb);
         }
+
+        [Fact]
+        public async Task AddCatAsync_ReturnsBadRequest_WhenCatLimitReached()
+        {
+            // Arrange
+            _dbContext.Users.Add(new UserEntity { Id = "user123" });
+            for (int i = 0; i < 20; i++)
+            {
+                _dbContext.Cats.Add(new CatEntity { Id = Guid.NewGuid(), UserId = "user123", Name = $"Cat{i}" });
+            }
+            await _dbContext.SaveChangesAsync();
+
+            var createDto = new CatCreateDto
+            {
+                Name = "TooMany",
+                Breed = "Maine Coon",
+                Weight = 6.2m
+            };
+
+            // Act
+            var result = await _controller.AddCatAsync(createDto, CancellationToken.None);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("Maximum number of cats reached.", badRequestResult.Value);
+        }
     }
 }

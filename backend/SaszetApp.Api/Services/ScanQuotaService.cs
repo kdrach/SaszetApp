@@ -29,40 +29,9 @@ namespace SaszetApp.Api.Services
 
         public async Task<UserScanUsageEntity?> CheckAndRecordUsageAsync(string userId, CancellationToken cancellationToken = default)
         {
-            int limit = 5;
-            int rollingDays = 7;
-
             using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
-            if (!_cache.TryGetValue("GlobalScanLimit", out int globalLimit))
-            {
-                var globalLimitSetting = await dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == "GlobalScanLimit", cancellationToken);
-                if (globalLimitSetting != null && int.TryParse(globalLimitSetting.Value, out int parsedLimit))
-                {
-                    globalLimit = parsedLimit;
-                }
-                else
-                {
-                    globalLimit = limit;
-                }
-                _cache.Set("GlobalScanLimit", globalLimit, TimeSpan.FromMinutes(10));
-            }
-            limit = globalLimit;
-
-            if (!_cache.TryGetValue("ScanLimitRollingDays", out int cacheDays))
-            {
-                var rollingDaysSetting = await dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == "ScanLimitRollingDays", cancellationToken);
-                if (rollingDaysSetting != null && int.TryParse(rollingDaysSetting.Value, out int parsedDays))
-                {
-                    cacheDays = parsedDays;
-                }
-                else
-                {
-                    cacheDays = rollingDays;
-                }
-                _cache.Set("ScanLimitRollingDays", cacheDays, TimeSpan.FromMinutes(10));
-            }
-            rollingDays = cacheDays;
+            var (limit, rollingDays) = await GetSettingsAsync(dbContext, cancellationToken);
 
             var userLimit = await dbContext.UserScanLimits.FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
             if (userLimit != null)
@@ -192,12 +161,10 @@ namespace SaszetApp.Api.Services
             }
         }
         
-        public async Task<int> GetRemainingScansAsync(string userId, CancellationToken cancellationToken = default)
+        private async Task<(int Limit, int RollingDays)> GetSettingsAsync(AppDbContext dbContext, CancellationToken cancellationToken)
         {
             int limit = 5;
             int rollingDays = 7;
-
-            using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
             if (!_cache.TryGetValue("GlobalScanLimit", out int globalLimit))
             {
@@ -228,6 +195,15 @@ namespace SaszetApp.Api.Services
                 _cache.Set("ScanLimitRollingDays", cacheDays, TimeSpan.FromMinutes(10));
             }
             rollingDays = cacheDays;
+
+            return (limit, rollingDays);
+        }
+
+        public async Task<int> GetRemainingScansAsync(string userId, CancellationToken cancellationToken = default)
+        {
+            using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+            var (limit, rollingDays) = await GetSettingsAsync(dbContext, cancellationToken);
 
             var userLimit = await dbContext.UserScanLimits.FirstOrDefaultAsync(u => u.UserId == userId, cancellationToken);
             if (userLimit != null)
