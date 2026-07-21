@@ -8,7 +8,7 @@ namespace SaszetApp.Api.Mappers
     {
         public Cat MapToCat(CatEntity entity)
         {
-            if (entity == null) return null!;
+            if (entity == null) throw new System.ArgumentNullException(nameof(entity));
 
             return new Cat
             {
@@ -23,7 +23,7 @@ namespace SaszetApp.Api.Mappers
 
         public User MapToUser(UserEntity entity, int remainingScans)
         {
-            if (entity == null) return null!;
+            if (entity == null) throw new System.ArgumentNullException(nameof(entity));
 
             return new User
             {

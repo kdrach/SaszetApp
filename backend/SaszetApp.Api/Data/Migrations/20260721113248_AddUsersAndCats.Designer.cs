@@ -12,7 +12,7 @@ using SaszetApp.Api.Data;
 namespace SaszetApp.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260721112754_AddUsersAndCats")]
+    [Migration("20260721113248_AddUsersAndCats")]
     partial class AddUsersAndCats
     {
         /// <inheritdoc />
@@ -52,7 +52,8 @@ namespace SaszetApp.Api.Data.Migrations
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
 
                     b.Property<decimal?>("Weight")
                         .HasPrecision(5, 2)
@@ -176,7 +177,8 @@ namespace SaszetApp.Api.Data.Migrations
             modelBuilder.Entity("SaszetApp.Api.Data.UserEntity", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("text");
+                        .HasMaxLength(36)
+                        .HasColumnType("character varying(36)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -189,7 +191,7 @@ namespace SaszetApp.Api.Data.Migrations
             modelBuilder.Entity("SaszetApp.Api.Data.UserScanLimitEntity", b =>
                 {
                     b.Property<string>("UserId")
-                        .HasColumnType("text");
+                        .HasColumnType("character varying(36)");
 
                     b.Property<int>("MaxScans")
                         .HasColumnType("integer");
@@ -210,7 +212,7 @@ namespace SaszetApp.Api.Data.Migrations
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("character varying(36)");
 
                     b.HasKey("Id");
 
@@ -225,6 +227,28 @@ namespace SaszetApp.Api.Data.Migrations
                 {
                     b.HasOne("SaszetApp.Api.Data.UserEntity", "User")
                         .WithMany("Cats")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SaszetApp.Api.Data.UserScanLimitEntity", b =>
+                {
+                    b.HasOne("SaszetApp.Api.Data.UserEntity", "User")
+                        .WithOne()
+                        .HasForeignKey("SaszetApp.Api.Data.UserScanLimitEntity", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SaszetApp.Api.Data.UserScanUsageEntity", b =>
+                {
+                    b.HasOne("SaszetApp.Api.Data.UserEntity", "User")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

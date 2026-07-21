@@ -7,5 +7,6 @@ namespace SaszetApp.Api.Data
         [Key]
         public string UserId { get; set; } = string.Empty;
         public int MaxScans { get; set; }
+        public UserEntity? User { get; set; }
     }
 }
