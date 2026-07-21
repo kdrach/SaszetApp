@@ -41,3 +41,6 @@ This is a standard .NET 10.0 ASP.NET Core Web API project using Controllers and 
   - Added `UserEntity` and `CatEntity` to persist user profiles and registered cats.
   - Implemented `UserProfileMapper` (TDD) to map to `User` and `Cat` domain models.
   - Created EF Core migration `AddUsersAndCats`.
+- **User Profile Epic (API Endpoints)**:
+  - Added `ProfileController` with endpoints to GET profile (with cats and `RemainingScans`), POST a new cat, and DELETE a cat.
+  - Extended `IScanQuotaService` with `GetRemainingScansAsync` to calculate quota without burning it.

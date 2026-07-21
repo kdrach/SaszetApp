@@ -4,7 +4,13 @@ using SaszetApp.Api.Models;
 
 namespace SaszetApp.Api.Mappers
 {
-    public class UserProfileMapper
+    public interface IUserProfileMapper
+    {
+        Cat MapToCat(CatEntity entity);
+        User MapToUser(UserEntity entity, int remainingScans);
+    }
+
+    public class UserProfileMapper : IUserProfileMapper
     {
         public Cat MapToCat(CatEntity entity)
         {
