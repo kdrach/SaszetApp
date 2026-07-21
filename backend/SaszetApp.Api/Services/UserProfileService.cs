@@ -54,61 +54,12 @@ namespace SaszetApp.Api.Services
             return _mapper.MapToUser(userEntity, remainingScans);
         }
 
-        private class RefCountedSemaphore
-        {
-            public SemaphoreSlim Semaphore { get; } = new SemaphoreSlim(1, 1);
-            public int RefCount { get; set; }
-        }
-
-        private static readonly Dictionary<string, RefCountedSemaphore> _userLocks = new();
-
         public async Task<Cat> AddCatAsync(string userId, CatCreateDto dto, CancellationToken cancellationToken)
         {
-            RefCountedSemaphore userLock;
-            lock (_userLocks)
-            {
-                if (!_userLocks.TryGetValue(userId, out userLock))
-                {
-                    userLock = new RefCountedSemaphore { RefCount = 1 };
-                    _userLocks[userId] = userLock;
-                }
-                else
-                {
-                    userLock.RefCount++;
-                }
-            }
-
-            bool lockAcquired = false;
-            try
-            {
-                await userLock.Semaphore.WaitAsync(cancellationToken);
-                lockAcquired = true;
-                var catCount = await _dbContext.Cats.CountAsync(c => c.UserId == userId, cancellationToken);
-                if (catCount >= 20)
-                {
-                    throw new InvalidOperationException("Maximum number of cats reached.");
-                }
-
             var userExists = await _dbContext.Users.AnyAsync(u => u.Id == userId, cancellationToken);
             if (!userExists)
             {
                 _dbContext.Users.Add(new UserEntity { Id = userId });
-            }
-
-            var catEntity = new CatEntity
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                Name = dto.Name,
-                Breed = dto.Breed,
-                Weight = dto.Weight,
-                Allergies = dto.Allergies
-            };
-
-            _dbContext.Cats.Add(catEntity);
-            
-            if (!userExists)
-            {
                 try
                 {
                     await _dbContext.SaveChangesAsync(cancellationToken);
@@ -120,31 +71,38 @@ namespace SaszetApp.Api.Services
                     {
                         userEntry.State = EntityState.Detached;
                     }
-                    await _dbContext.SaveChangesAsync(cancellationToken);
                 }
-            }
-            else
-            {
-                await _dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            return _mapper.MapToCat(catEntity);
-            }
-            finally
+            using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+            try
             {
-                if (lockAcquired)
+                var catCount = await _dbContext.Cats.CountAsync(c => c.UserId == userId, cancellationToken);
+                if (catCount >= 20)
                 {
-                    userLock.Semaphore.Release();
+                    throw new InvalidOperationException("Maximum number of cats reached.");
                 }
-                lock (_userLocks)
+
+                var catEntity = new CatEntity
                 {
-                    userLock.RefCount--;
-                    if (userLock.RefCount == 0)
-                    {
-                        _userLocks.Remove(userId);
-                        userLock.Semaphore.Dispose();
-                    }
-                }
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    Name = dto.Name,
+                    Breed = dto.Breed,
+                    Weight = dto.Weight,
+                    Allergies = dto.Allergies
+                };
+
+                _dbContext.Cats.Add(catEntity);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                return _mapper.MapToCat(catEntity);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
             }
         }
 
