@@ -42,5 +42,9 @@
   "save": "Save",
   "cancel": "Cancel",
   "noCatsAdded": "No cats added.",
-  "yourCats": "Your Cats"
+  "yourCats": "Your Cats",
+  "allergiesPlaceholder": "e.g. Chicken, Grains",
+  "errorLoadProfile": "Failed to load profile",
+  "errorAddCat": "Failed to add cat",
+  "errorDeleteCat": "Failed to delete cat"
 }

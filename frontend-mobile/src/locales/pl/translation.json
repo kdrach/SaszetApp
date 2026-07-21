@@ -42,5 +42,9 @@
   "save": "Zapisz",
   "cancel": "Anuluj",
   "noCatsAdded": "Brak dodanych kotów.",
-  "yourCats": "Twoje koty"
+  "yourCats": "Twoje koty",
+  "allergiesPlaceholder": "np. Kurczak, Zboża",
+  "errorLoadProfile": "Nie udało się wczytać profilu",
+  "errorAddCat": "Nie udało się dodać kota",
+  "errorDeleteCat": "Nie udało się usunąć kota"
 }

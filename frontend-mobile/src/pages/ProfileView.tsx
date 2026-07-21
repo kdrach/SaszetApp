@@ -38,7 +38,7 @@ const ProfileView: React.FC = () => {
       setProfile(data);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to load profile');
+      setError(err.message || t('errorLoadProfile'));
     } finally {
       setLoading(false);
     }
@@ -61,7 +61,7 @@ const ProfileView: React.FC = () => {
       setNewCat({ name: '', breed: '', weight: 0, allergies: '' });
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to add cat');
+      setError(err.message || t('errorAddCat'));
     } finally {
       setIsAdding(false);
     }
@@ -79,7 +79,7 @@ const ProfileView: React.FC = () => {
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to delete cat');
+      setError(err.message || t('errorDeleteCat'));
     }
   };
 
@@ -245,7 +245,7 @@ const ProfileView: React.FC = () => {
                   value={newCat.allergies}
                   onChange={(e) => setNewCat({...newCat, allergies: e.target.value})}
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                  placeholder="e.g. Kurczak, Zboża"
+                  placeholder={t('allergiesPlaceholder')}
                 />
               </div>
 
