@@ -13,6 +13,8 @@ namespace SaszetApp.Api.Data
         public DbSet<SystemSettingEntity> SystemSettings { get; set; }
         public DbSet<UserScanLimitEntity> UserScanLimits { get; set; }
         public DbSet<UserScanUsageEntity> UserScanUsages { get; set; }
+        public DbSet<UserEntity> Users { get; set; }
+        public DbSet<CatEntity> Cats { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -62,6 +64,7 @@ namespace SaszetApp.Api.Data
             {
                 entity.ToTable("UserScanLimits");
                 entity.HasKey(e => e.UserId);
+                entity.HasOne(e => e.User).WithOne().HasForeignKey<UserScanLimitEntity>(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<UserScanUsageEntity>(entity =>
@@ -70,6 +73,26 @@ namespace SaszetApp.Api.Data
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.ScannedAt);
+                entity.HasOne(e => e.User).WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
+            modelBuilder.Entity<UserEntity>(entity =>
+            {
+                entity.ToTable("Users");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasMaxLength(36);
+                entity.HasMany(e => e.Cats).WithOne(c => c.User).HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<CatEntity>(entity =>
+            {
+                entity.ToTable("Cats");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.UserId).HasMaxLength(36);
+                entity.HasIndex(e => e.UserId);
+                entity.Property(e => e.Allergies).HasColumnType("jsonb");
+                entity.Property(e => e.Name).HasMaxLength(100);
+                entity.Property(e => e.Breed).HasMaxLength(100);
+                entity.Property(e => e.Weight).HasPrecision(5, 2);
             });
         }
     }

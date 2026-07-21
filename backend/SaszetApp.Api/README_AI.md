@@ -37,3 +37,7 @@ This is a standard .NET 10.0 ASP.NET Core Web API project using Controllers and 
   - Fixed Gemini API URL generation bug by stripping 'models/' prefix appropriately for both Text and Image payloads.
 - **Security Hotfix (Token Burn)**:
   - Ensured `NO_PET_FOOD_FOUND` errors intentionally skip the `RefundUsageAsync` process. This burns the scan quota for invalid/malicious image uploads, preventing wallet exhaustion.
+- **User Profile Epic (Schema Update)**:
+  - Added `UserEntity` and `CatEntity` to persist user profiles and registered cats.
+  - Implemented `UserProfileMapper` (TDD) to map to `User` and `Cat` domain models.
+  - Created EF Core migration `AddUsersAndCats`.

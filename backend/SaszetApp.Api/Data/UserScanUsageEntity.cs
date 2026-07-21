@@ -9,5 +9,6 @@ namespace SaszetApp.Api.Data
         public Guid Id { get; set; }
         public string UserId { get; set; } = string.Empty;
         public DateTime ScannedAt { get; set; }
+        public UserEntity? User { get; set; }
     }
 }
