@@ -5,41 +5,30 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Moq;
 using SaszetApp.Api.Controllers;
-using SaszetApp.Api.Data;
 using SaszetApp.Api.DTOs;
-using SaszetApp.Api.Mappers;
 using SaszetApp.Api.Models;
 using SaszetApp.Api.Services;
 using Xunit;
 
 namespace SaszetApp.Api.Tests
 {
-    public class ProfileControllerTests : IDisposable
+    public class ProfileControllerTests
     {
-        private readonly AppDbContext _dbContext;
-        private readonly Mock<IScanQuotaService> _mockScanQuotaService;
-        private readonly IUserProfileMapper _mapper;
+        private readonly Mock<IUserProfileService> _mockUserProfileService;
         private readonly ProfileController _controller;
 
         public ProfileControllerTests()
         {
-            var options = new DbContextOptionsBuilder<AppDbContext>()
-                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-                .Options;
-
-            _dbContext = new AppDbContext(options);
-            _mockScanQuotaService = new Mock<IScanQuotaService>();
-            _mapper = new UserProfileMapper();
+            _mockUserProfileService = new Mock<IUserProfileService>();
 
             var user = new ClaimsPrincipal(new ClaimsIdentity(new Claim[]
             {
                 new Claim(ClaimTypes.NameIdentifier, "user123")
             }, "TestAuthType"));
 
-            _controller = new ProfileController(_dbContext, _mockScanQuotaService.Object, _mapper)
+            _controller = new ProfileController(_mockUserProfileService.Object)
             {
                 ControllerContext = new ControllerContext
                 {
@@ -48,22 +37,22 @@ namespace SaszetApp.Api.Tests
             };
         }
 
-        public void Dispose()
-        {
-            _dbContext.Database.EnsureDeleted();
-            _dbContext.Dispose();
-        }
-
         [Fact]
-        public async Task GetProfileAsync_ReturnsUserProfileWithCatsAndScans()
+        public async Task GetProfileAsync_ReturnsUserProfile()
         {
             // Arrange
-            _dbContext.Users.Add(new UserEntity { Id = "user123" });
-            _dbContext.Cats.Add(new CatEntity { Id = Guid.NewGuid(), UserId = "user123", Name = "Filemon", Breed = "Dachowiec", Weight = 4.5m });
-            await _dbContext.SaveChangesAsync();
+            var userProfile = new User
+            {
+                Id = "user123",
+                RemainingScans = 3,
+                Cats = new List<Cat>
+                {
+                    new Cat { Id = Guid.NewGuid(), Name = "Filemon", Breed = "Dachowiec", Weight = 4.5m }
+                }
+            };
 
-            _mockScanQuotaService.Setup(s => s.GetRemainingScansAsync("user123", It.IsAny<CancellationToken>()))
-                .ReturnsAsync(3);
+            _mockUserProfileService.Setup(s => s.GetProfileAsync("user123", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(userProfile);
 
             // Act
             var result = await _controller.GetProfileAsync(CancellationToken.None);
@@ -81,9 +70,6 @@ namespace SaszetApp.Api.Tests
         public async Task AddCatAsync_CreatesCatAndReturnsIt()
         {
             // Arrange
-            _dbContext.Users.Add(new UserEntity { Id = "user123" });
-            await _dbContext.SaveChangesAsync();
-
             var createDto = new CatCreateDto
             {
                 Name = "Bonifacy",
@@ -91,6 +77,18 @@ namespace SaszetApp.Api.Tests
                 Weight = 6.2m,
                 Allergies = new List<string> { "Kurczak" }
             };
+
+            var createdCat = new Cat
+            {
+                Id = Guid.NewGuid(),
+                Name = "Bonifacy",
+                Breed = "Maine Coon",
+                Weight = 6.2m,
+                Allergies = new List<string> { "Kurczak" }
+            };
+
+            _mockUserProfileService.Setup(s => s.AddCatAsync("user123", createDto, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(createdCat);
 
             // Act
             var result = await _controller.AddCatAsync(createDto, CancellationToken.None);
@@ -102,46 +100,51 @@ namespace SaszetApp.Api.Tests
             Assert.Equal("Maine Coon", cat.Breed);
             Assert.Equal(6.2m, cat.Weight);
             Assert.Contains("Kurczak", cat.Allergies);
-
-            var catInDb = await _dbContext.Cats.FirstOrDefaultAsync(c => c.Name == "Bonifacy");
-            Assert.NotNull(catInDb);
         }
 
         [Fact]
-        public async Task DeleteCatAsync_RemovesCat()
+        public async Task DeleteCatAsync_RemovesCatAndReturnsNoContent()
         {
             // Arrange
             var catId = Guid.NewGuid();
-            _dbContext.Users.Add(new UserEntity { Id = "user123" });
-            _dbContext.Cats.Add(new CatEntity { Id = catId, UserId = "user123", Name = "Filemon" });
-            await _dbContext.SaveChangesAsync();
+            _mockUserProfileService.Setup(s => s.DeleteCatAsync("user123", catId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
 
             // Act
             var result = await _controller.DeleteCatAsync(catId, CancellationToken.None);
 
             // Assert
             Assert.IsType<NoContentResult>(result);
-            var catInDb = await _dbContext.Cats.FirstOrDefaultAsync(c => c.Id == catId);
-            Assert.Null(catInDb);
+        }
+
+        [Fact]
+        public async Task DeleteCatAsync_ReturnsNotFound_WhenCatDoesNotExist()
+        {
+            // Arrange
+            var catId = Guid.NewGuid();
+            _mockUserProfileService.Setup(s => s.DeleteCatAsync("user123", catId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false);
+
+            // Act
+            var result = await _controller.DeleteCatAsync(catId, CancellationToken.None);
+
+            // Assert
+            Assert.IsType<NotFoundResult>(result);
         }
 
         [Fact]
         public async Task AddCatAsync_ReturnsBadRequest_WhenCatLimitReached()
         {
             // Arrange
-            _dbContext.Users.Add(new UserEntity { Id = "user123" });
-            for (int i = 0; i < 20; i++)
-            {
-                _dbContext.Cats.Add(new CatEntity { Id = Guid.NewGuid(), UserId = "user123", Name = $"Cat{i}" });
-            }
-            await _dbContext.SaveChangesAsync();
-
             var createDto = new CatCreateDto
             {
                 Name = "TooMany",
                 Breed = "Maine Coon",
                 Weight = 6.2m
             };
+
+            _mockUserProfileService.Setup(s => s.AddCatAsync("user123", createDto, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("Maximum number of cats reached."));
 
             // Act
             var result = await _controller.AddCatAsync(createDto, CancellationToken.None);
