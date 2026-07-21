@@ -54,6 +54,11 @@ namespace SaszetApp.Api.Controllers
                 }
                 catch (DbUpdateException)
                 {
+                    var userEntry = _dbContext.ChangeTracker.Entries<UserEntity>().FirstOrDefault(e => e.Entity.Id == userId);
+                    if (userEntry != null)
+                    {
+                        userEntry.State = EntityState.Detached;
+                    }
                 }
             }
 
@@ -101,6 +106,12 @@ namespace SaszetApp.Api.Controllers
                 }
                 catch (DbUpdateException)
                 {
+                    var userEntry = _dbContext.ChangeTracker.Entries<UserEntity>().FirstOrDefault(e => e.Entity.Id == userId);
+                    if (userEntry != null)
+                    {
+                        userEntry.State = EntityState.Detached;
+                    }
+                    await _dbContext.SaveChangesAsync(cancellationToken);
                 }
             }
             else
