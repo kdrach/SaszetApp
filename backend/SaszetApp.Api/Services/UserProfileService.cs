@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -53,13 +54,19 @@ namespace SaszetApp.Api.Services
             return _mapper.MapToUser(userEntity, remainingScans);
         }
 
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> _userLocks = new();
+
         public async Task<Cat> AddCatAsync(string userId, CatCreateDto dto, CancellationToken cancellationToken)
         {
-            var catCount = await _dbContext.Cats.CountAsync(c => c.UserId == userId, cancellationToken);
-            if (catCount >= 20)
+            var semaphore = _userLocks.GetOrAdd(userId, _ => new SemaphoreSlim(1, 1));
+            await semaphore.WaitAsync(cancellationToken);
+            try
             {
-                throw new InvalidOperationException("Maximum number of cats reached.");
-            }
+                var catCount = await _dbContext.Cats.CountAsync(c => c.UserId == userId, cancellationToken);
+                if (catCount >= 20)
+                {
+                    throw new InvalidOperationException("Maximum number of cats reached.");
+                }
 
             var userExists = await _dbContext.Users.AnyAsync(u => u.Id == userId, cancellationToken);
             if (!userExists)
@@ -101,6 +108,11 @@ namespace SaszetApp.Api.Services
             }
 
             return _mapper.MapToCat(catEntity);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
         }
 
         public async Task<bool> DeleteCatAsync(string userId, Guid catId, CancellationToken cancellationToken)
