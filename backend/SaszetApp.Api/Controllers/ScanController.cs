@@ -130,6 +130,15 @@ namespace SaszetApp.Api.Controllers
                     Summary = cachedEntity.Summary,
                     ExtractedIngredients = cachedEntity.ExtractedIngredients
                 };
+                
+                if (!string.IsNullOrEmpty(userProfileContext))
+                {
+                    var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+                    if (usageEntity == null)
+                    {
+                        return StatusCode(429, new { message = "You have reached your scan limit." });
+                    }
+                }
             }
             else
             {
