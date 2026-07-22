@@ -26,23 +26,6 @@ namespace SaszetApp.Api.Data.Migrations
                 oldClrType: typeof(string),
                 oldType: "text");
 
-            migrationBuilder.AlterColumn<string>(
-                name: "Id",
-                table: "Users",
-                type: "character varying(36)",
-                maxLength: 36,
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "text");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "Cats",
-                type: "character varying(36)",
-                maxLength: 36,
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "text");
 
             migrationBuilder.CreateTable(
                 name: "Users",

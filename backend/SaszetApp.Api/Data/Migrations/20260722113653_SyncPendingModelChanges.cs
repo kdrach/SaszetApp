@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -26,23 +26,6 @@ namespace SaszetApp.Api.Data.Migrations
                 oldClrType: typeof(string),
                 oldType: "text");
 
-            migrationBuilder.AlterColumn<string>(
-                name: "Id",
-                table: "Users",
-                type: "character varying(36)",
-                maxLength: 36,
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "text");
-
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "Cats",
-                type: "character varying(36)",
-                maxLength: 36,
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "text");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_UserScanLimits_Users_UserId",
@@ -88,23 +71,6 @@ namespace SaszetApp.Api.Data.Migrations
                 oldClrType: typeof(string),
                 oldType: "character varying(36)");
 
-            migrationBuilder.AlterColumn<string>(
-                name: "Id",
-                table: "Users",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "character varying(36)",
-                oldMaxLength: 36);
-
-            migrationBuilder.AlterColumn<string>(
-                name: "UserId",
-                table: "Cats",
-                type: "text",
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "character varying(36)",
-                oldMaxLength: 36);
         }
     }
 }
