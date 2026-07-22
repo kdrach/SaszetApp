@@ -68,6 +68,18 @@ namespace SaszetApp.Api.Data.Migrations
                 table: "Cats",
                 column: "UserId");
 
+            migrationBuilder.Sql(@"
+                INSERT INTO ""Users"" (""Id"", ""CreatedAt"")
+                SELECT DISTINCT ""UserId"", NOW() FROM ""UserScanUsages""
+                ON CONFLICT (""Id"") DO NOTHING;
+            ");
+
+            migrationBuilder.Sql(@"
+                INSERT INTO ""Users"" (""Id"", ""CreatedAt"")
+                SELECT DISTINCT ""UserId"", NOW() FROM ""UserScanLimits""
+                ON CONFLICT (""Id"") DO NOTHING;
+            ");
+
             migrationBuilder.AddForeignKey(
                 name: "FK_UserScanLimits_Users_UserId",
                 table: "UserScanLimits",
