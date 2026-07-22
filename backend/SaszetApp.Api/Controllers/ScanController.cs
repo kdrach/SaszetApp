@@ -119,6 +119,9 @@ namespace SaszetApp.Api.Controllers
             Guid? entityId = cachedEntity?.Id;
             string entityEanCode = cachedEntity?.EanCode;
 
+            bool chargedForPersonalizationOnly = false;
+            UserScanUsageEntity usageEntity = null;
+
             if (cachedEntity != null)
             {
                 genericResult = new VlmResponseContract 
@@ -131,18 +134,19 @@ namespace SaszetApp.Api.Controllers
                     ExtractedIngredients = cachedEntity.ExtractedIngredients
                 };
                 
-                if (!string.IsNullOrEmpty(userProfileContext))
+                if (!string.IsNullOrEmpty(userProfileContext) && fallbackChain != null && fallbackChain.Any())
                 {
-                    var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+                    usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
                     if (usageEntity == null)
                     {
                         return StatusCode(429, new { message = "You have reached your scan limit." });
                     }
+                    chargedForPersonalizationOnly = true;
                 }
             }
             else
             {
-                var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+                usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
                 if (usageEntity == null)
                 {
                     return StatusCode(429, new { message = "You have reached your scan limit." });
@@ -223,6 +227,11 @@ namespace SaszetApp.Api.Controllers
             }
 
             var finalResult = await PersonalizeAsync(genericResult, userProfileContext, language, fallbackChain, cancellationToken);
+
+            if (chargedForPersonalizationOnly && Object.ReferenceEquals(finalResult, genericResult))
+            {
+                await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+            }
 
             var model = new PetFoodItem
             {
