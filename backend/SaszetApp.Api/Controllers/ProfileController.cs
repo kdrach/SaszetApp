@@ -11,7 +11,7 @@ namespace SaszetApp.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+    [Authorize(Policy = "CustomerPolicy")]
     public class ProfileController : ControllerBase
     {
         private readonly IUserProfileService _userProfileService;
