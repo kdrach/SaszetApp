@@ -62,7 +62,7 @@ namespace SaszetApp.Api.Services
             var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (vlmResponse == null) throw new InvalidOperationException("Failed to parse VLM response.");
 
-            return Sanitize(vlmResponse);
+            return Sanitize(vlmResponse)!;
         }
 
         public async Task<VlmResponseContract> AnalyzeImageAsync(string providerName, string modelName, string apiKey, string base64Image, string mimeType, string language, CancellationToken cancellationToken)
@@ -87,7 +87,7 @@ namespace SaszetApp.Api.Services
             var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (vlmResponse == null) throw new InvalidOperationException("Failed to parse VLM response.");
 
-            return Sanitize(vlmResponse);
+            return Sanitize(vlmResponse)!;
         }
 
         public async Task<MultiVlmResponseContract> AnalyzeMultipleImagesAsync(string providerName, string modelName, string apiKey, System.Collections.Generic.List<string> base64Images, string mimeType, string language, CancellationToken cancellationToken)
@@ -108,7 +108,7 @@ namespace SaszetApp.Api.Services
             if (multiResponse == null || multiResponse.Products == null) throw new InvalidOperationException("Failed to parse VLM response for multiple images.");
 
             // Sanitize each product
-            multiResponse.Products = multiResponse.Products.Select(Sanitize).ToList();
+            multiResponse.Products = multiResponse.Products.Where(p => p != null).Select(p => Sanitize(p)!).ToList();
 
             return multiResponse;
         }
@@ -137,21 +137,21 @@ namespace SaszetApp.Api.Services
             var vlmResponse = JsonSerializer.Deserialize<VlmResponseContract>(jsonResponse, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (vlmResponse == null) throw new InvalidOperationException("Failed to parse VLM response.");
 
-            return Sanitize(vlmResponse);
+            return Sanitize(vlmResponse)!;
         }
 
-        private VlmResponseContract Sanitize(VlmResponseContract response)
+        private VlmResponseContract? Sanitize(VlmResponseContract? response)
         {
             if (response == null) return null;
             var sanitizer = new Ganss.Xss.HtmlSanitizer();
             return new VlmResponseContract
             {
-                ProductName = response.ProductName != null ? sanitizer.Sanitize(response.ProductName) : null,
+                ProductName = response.ProductName != null ? sanitizer.Sanitize(response.ProductName) : string.Empty,
                 Rating = response.Rating,
-                Pros = response.Pros?.Select(p => p != null ? sanitizer.Sanitize(p) : null).ToList(),
-                Cons = response.Cons?.Select(c => c != null ? sanitizer.Sanitize(c) : null).ToList(),
-                Summary = response.Summary != null ? sanitizer.Sanitize(response.Summary) : null,
-                ExtractedIngredients = response.ExtractedIngredients != null ? sanitizer.Sanitize(response.ExtractedIngredients) : null
+                Pros = response.Pros?.Where(p => p != null).Select(p => sanitizer.Sanitize(p!)).ToList() ?? new System.Collections.Generic.List<string>(),
+                Cons = response.Cons?.Where(c => c != null).Select(c => sanitizer.Sanitize(c!)).ToList() ?? new System.Collections.Generic.List<string>(),
+                Summary = response.Summary != null ? sanitizer.Sanitize(response.Summary) : string.Empty,
+                ExtractedIngredients = response.ExtractedIngredients != null ? sanitizer.Sanitize(response.ExtractedIngredients) : string.Empty
             };
         }
 
