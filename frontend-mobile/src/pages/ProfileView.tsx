@@ -83,7 +83,7 @@ const ProfileView: React.FC = () => {
     }
   };
 
-  if (loading || !profile) {
+  if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center pt-20">
         <Loader2 className="w-10 h-10 animate-spin text-emerald-500 mb-4" />
@@ -162,6 +162,7 @@ const ProfileView: React.FC = () => {
               </div>
               <button 
                 onClick={() => handleDeleteCat(cat.id)}
+                data-testid="delete-cat-button"
                 className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors active:scale-95"
               >
                 <Trash2 className="w-5 h-5" />

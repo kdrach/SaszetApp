@@ -162,16 +162,8 @@ describe('ProfileView', () => {
     });
 
     // click delete button
-    const buttons = screen.getAllByRole('button');
-    // Assuming the first button might be something else, let's just click the trash button
-    // It's inside the li.
-    const trashButton = buttons.find(b => b.innerHTML.includes('lucide'));
-    if (trashButton) {
-        fireEvent.click(trashButton);
-    } else {
-        // Fallback
-        fireEvent.click(buttons[0]);
-    }
+    const trashButton = screen.getByTestId('delete-cat-button');
+    fireEvent.click(trashButton);
 
     await waitFor(() => {
       expect(profileApi.deleteCat).toHaveBeenCalledWith('cat-1');
@@ -193,8 +185,7 @@ describe('ProfileView', () => {
       expect(screen.getByText('Mruczek')).toBeInTheDocument();
     });
 
-    const buttons = screen.getAllByRole('button');
-    const trashButton = buttons.find(b => b.innerHTML.includes('lucide')) || buttons[0];
+    const trashButton = screen.getByTestId('delete-cat-button');
     fireEvent.click(trashButton);
 
     await waitFor(() => {
