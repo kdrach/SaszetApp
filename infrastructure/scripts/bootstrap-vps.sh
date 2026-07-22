@@ -356,18 +356,13 @@ wait_for_health() {
       ps --format json 2>/dev/null \
       | grep -c -iE '"Health":"(starting|unknown)"' || true)
 
-    if [ "$UNHEALTHY" -gt 0 ]; then
-      echo ""
-      error "One or more containers are UNHEALTHY after ${ELAPSED}s. See logs above."
-    fi
-
-    if [ "$STARTING" -eq 0 ]; then
+    if [ "$STARTING" -eq 0 ] && [ "$UNHEALTHY" -eq 0 ]; then
       echo ""
       success "All containers are healthy!"
       return 0
     fi
 
-    printf "\r  ⏳ Waiting... %ds elapsed (%d container(s) still starting)" "$ELAPSED" "$STARTING"
+    printf "\r  ⏳ Waiting... %ds elapsed (%d starting, %d unhealthy)" "$ELAPSED" "$STARTING" "$UNHEALTHY"
     sleep "$POLL_INTERVAL"
     ELAPSED=$((ELAPSED + POLL_INTERVAL))
   done
