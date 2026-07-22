@@ -40,9 +40,9 @@ namespace SaszetApp.Api.Controllers
             _memoryCache = memoryCache;
         }
 
-        private async Task<System.Collections.Generic.List<LlmProviderEntity>> GetFallbackChainAsync(System.Threading.CancellationToken cancellationToken)
+        private async Task<System.Collections.Generic.List<LlmProviderEntity>?> GetFallbackChainAsync(System.Threading.CancellationToken cancellationToken)
         {
-            if (!_memoryCache.TryGetValue("LlmFallbackChain", out System.Collections.Generic.List<LlmProviderEntity> fallbackChain))
+            if (!_memoryCache.TryGetValue("LlmFallbackChain", out System.Collections.Generic.List<LlmProviderEntity>? fallbackChain))
             {
                 var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
                 if (activeCategory != null)
@@ -59,7 +59,7 @@ namespace SaszetApp.Api.Controllers
             return fallbackChain;
         }
 
-        private async Task<string> GetUserProfileContextAsync(string userId, System.Threading.CancellationToken cancellationToken)
+        private async Task<string?> GetUserProfileContextAsync(string userId, System.Threading.CancellationToken cancellationToken)
         {
             var cats = await _dbContext.Cats.Where(c => c.UserId == userId).ToListAsync(cancellationToken);
             if (!cats.Any()) return null;
@@ -67,12 +67,12 @@ namespace SaszetApp.Api.Controllers
             return $"Cats: {string.Join("; ", catProfiles)}";
         }
 
-        private async Task<VlmResponseContract> PersonalizeAsync(VlmResponseContract genericResult, string userProfileContext, string language, System.Collections.Generic.List<LlmProviderEntity> fallbackChain, System.Threading.CancellationToken cancellationToken)
+        private async Task<VlmResponseContract?> PersonalizeAsync(VlmResponseContract? genericResult, string? userProfileContext, string language, System.Collections.Generic.List<LlmProviderEntity>? fallbackChain, System.Threading.CancellationToken cancellationToken)
         {
-            if (string.IsNullOrEmpty(userProfileContext) || fallbackChain == null || !fallbackChain.Any())
+            if (string.IsNullOrEmpty(userProfileContext) || fallbackChain == null || !fallbackChain.Any() || genericResult == null)
                 return genericResult;
 
-            VlmResponseContract personalizedResult = null;
+            VlmResponseContract? personalizedResult = null;
             foreach (var providerEntity in fallbackChain)
             {
                 var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
@@ -115,12 +115,12 @@ namespace SaszetApp.Api.Controllers
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            VlmResponseContract genericResult = null;
+            VlmResponseContract? genericResult = null;
             Guid? entityId = cachedEntity?.Id;
-            string entityEanCode = cachedEntity?.EanCode;
+            string? entityEanCode = cachedEntity?.EanCode;
 
             bool chargedForPersonalizationOnly = false;
-            UserScanUsageEntity usageEntity = null;
+            UserScanUsageEntity? usageEntity = null;
 
             if (cachedEntity != null)
             {
@@ -160,7 +160,7 @@ namespace SaszetApp.Api.Controllers
                 }
 
                 bool llmCallCompleted = false;
-                Exception lastException = null;
+                Exception? lastException = null;
 
                 try
                 {
@@ -230,19 +230,19 @@ namespace SaszetApp.Api.Controllers
 
             if (chargedForPersonalizationOnly && Object.ReferenceEquals(finalResult, genericResult))
             {
-                await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                await _scanQuotaService.RefundUsageAsync(usageEntity!, System.Threading.CancellationToken.None);
             }
 
             var model = new PetFoodItem
             {
                 Id = entityId ?? Guid.NewGuid(),
-                ProductName = finalResult.ProductName,
+                ProductName = finalResult?.ProductName ?? string.Empty,
                 Language = language,
-                Rating = finalResult.Rating,
-                Pros = finalResult.Pros,
-                Cons = finalResult.Cons,
-                Summary = finalResult.Summary,
-                ExtractedIngredients = finalResult.ExtractedIngredients,
+                Rating = finalResult?.Rating ?? 0,
+                Pros = finalResult?.Pros ?? new System.Collections.Generic.List<string>(),
+                Cons = finalResult?.Cons ?? new System.Collections.Generic.List<string>(),
+                Summary = finalResult?.Summary ?? string.Empty,
+                ExtractedIngredients = finalResult?.ExtractedIngredients ?? string.Empty,
                 EanCode = entityEanCode
             };
 
@@ -326,11 +326,11 @@ namespace SaszetApp.Api.Controllers
                 base64Image = Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
             }
 
-            VlmResponseContract genericResult = null;
+            VlmResponseContract? genericResult = null;
             bool llmCallCompleted = false;
             try
             {
-                Exception lastException = null;
+                Exception? lastException = null;
 
                 foreach (var providerEntity in fallbackChain)
                 {
@@ -385,13 +385,13 @@ namespace SaszetApp.Api.Controllers
                 var model = new PetFoodItem
                 {
                     Id = newEntity.Id,
-                    ProductName = finalResult.ProductName,
+                    ProductName = finalResult?.ProductName ?? string.Empty,
                     Language = language,
-                    Rating = finalResult.Rating,
-                    Pros = finalResult.Pros,
-                    Cons = finalResult.Cons,
-                    Summary = finalResult.Summary,
-                    ExtractedIngredients = finalResult.ExtractedIngredients
+                    Rating = finalResult?.Rating ?? 0,
+                    Pros = finalResult?.Pros ?? new System.Collections.Generic.List<string>(),
+                    Cons = finalResult?.Cons ?? new System.Collections.Generic.List<string>(),
+                    Summary = finalResult?.Summary ?? string.Empty,
+                    ExtractedIngredients = finalResult?.ExtractedIngredients ?? string.Empty
                 };
 
                 return Ok(model);
@@ -512,8 +512,8 @@ namespace SaszetApp.Api.Controllers
             bool llmCallCompleted = false;
             try
             {
-                MultiVlmResponseContract result = null;
-                Exception lastException = null;
+                MultiVlmResponseContract? result = null;
+                Exception? lastException = null;
 
                 foreach (var providerEntity in fallbackChain)
                 {
@@ -556,13 +556,13 @@ namespace SaszetApp.Api.Controllers
                         var model = new PetFoodItem
                         {
                             Id = Guid.NewGuid(),
-                            ProductName = finalProd.ProductName,
+                            ProductName = finalProd?.ProductName ?? string.Empty,
                             Language = language,
-                            Rating = finalProd.Rating,
-                            Pros = finalProd.Pros,
-                            Cons = finalProd.Cons,
-                            Summary = finalProd.Summary,
-                            ExtractedIngredients = finalProd.ExtractedIngredients
+                            Rating = finalProd?.Rating ?? 0,
+                            Pros = finalProd?.Pros ?? new System.Collections.Generic.List<string>(),
+                            Cons = finalProd?.Cons ?? new System.Collections.Generic.List<string>(),
+                            Summary = finalProd?.Summary ?? string.Empty,
+                            ExtractedIngredients = finalProd?.ExtractedIngredients ?? string.Empty
                         };
                         models.Add(model);
                     }

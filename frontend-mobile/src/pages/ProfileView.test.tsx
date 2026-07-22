@@ -162,7 +162,6 @@ describe('ProfileView', () => {
     });
 
     // click delete button
-    const deleteButton = screen.getByRole('button', { name: '' }); // The trash icon doesn't have an aria-label, but it's a button. We might have multiple buttons. Let's find by svg or just the second button.
     const buttons = screen.getAllByRole('button');
     // Assuming the first button might be something else, let's just click the trash button
     // It's inside the li.

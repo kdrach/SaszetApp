@@ -41,7 +41,7 @@ namespace SaszetApp.Api.Services
 
             var thresholdDate = DateTime.UtcNow.AddDays(-rollingDays);
 
-            RefCountedSemaphore userLock;
+            RefCountedSemaphore? userLock;
             lock (_userLocks)
             {
                 if (!_userLocks.TryGetValue(userId, out userLock))
@@ -51,14 +51,14 @@ namespace SaszetApp.Api.Services
                 }
                 else
                 {
-                    userLock.RefCount++;
+                    userLock!.RefCount++;
                 }
             }
 
             bool lockAcquired = false;
             try
             {
-                await userLock.Semaphore.WaitAsync(cancellationToken);
+                await userLock!.Semaphore.WaitAsync(cancellationToken);
                 lockAcquired = true;
 
                 var entityId = Guid.NewGuid();
@@ -102,7 +102,7 @@ namespace SaszetApp.Api.Services
                 }
                 lock (_userLocks)
                 {
-                    userLock.RefCount--;
+                    userLock!.RefCount--;
                     if (userLock.RefCount == 0)
                     {
                         _userLocks.Remove(userId);
@@ -116,7 +116,7 @@ namespace SaszetApp.Api.Services
         {
             if (entity == null) return;
 
-            RefCountedSemaphore userLock;
+            RefCountedSemaphore? userLock;
             lock (_userLocks)
             {
                 if (!_userLocks.TryGetValue(entity.UserId, out userLock))
@@ -126,14 +126,14 @@ namespace SaszetApp.Api.Services
                 }
                 else
                 {
-                    userLock.RefCount++;
+                    userLock!.RefCount++;
                 }
             }
 
             bool lockAcquired = false;
             try
             {
-                await userLock.Semaphore.WaitAsync(CancellationToken.None);
+                await userLock!.Semaphore.WaitAsync(CancellationToken.None);
                 lockAcquired = true;
 
                 using var dbContext = await _dbContextFactory.CreateDbContextAsync(CancellationToken.None);
@@ -151,7 +151,7 @@ namespace SaszetApp.Api.Services
                 }
                 lock (_userLocks)
                 {
-                    userLock.RefCount--;
+                    userLock!.RefCount--;
                     if (userLock.RefCount == 0)
                     {
                         _userLocks.Remove(entity.UserId);

@@ -51,7 +51,7 @@ namespace SaszetApp.Api.Services
 
             var remainingScans = await _scanQuotaService.GetRemainingScansAsync(userId, cancellationToken);
 
-            return _mapper.MapToUser(userEntity, remainingScans);
+            return _mapper.MapToUser(userEntity!, remainingScans);
         }
 
         public async Task<Cat> AddCatAsync(string userId, CatCreateDto dto, CancellationToken cancellationToken)
@@ -94,7 +94,7 @@ namespace SaszetApp.Api.Services
                         Name = dto.Name,
                         Breed = dto.Breed,
                         Weight = dto.Weight,
-                        Allergies = dto.Allergies
+                        Allergies = dto.Allergies ?? new System.Collections.Generic.List<string>()
                     };
 
                     _dbContext.Cats.Add(catEntity);
