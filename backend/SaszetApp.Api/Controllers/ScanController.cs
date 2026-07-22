@@ -12,6 +12,7 @@ using SaszetApp.Api.Services.Mappers;
 using SaszetApp.Api.DTOs;
 using Microsoft.Extensions.Caching.Memory;
 using SkiaSharp;
+using Microsoft.Extensions.Logging;
 
 namespace SaszetApp.Api.Controllers
 {
@@ -39,6 +40,55 @@ namespace SaszetApp.Api.Controllers
             _memoryCache = memoryCache;
         }
 
+        private async Task<System.Collections.Generic.List<LlmProviderEntity>> GetFallbackChainAsync(System.Threading.CancellationToken cancellationToken)
+        {
+            if (!_memoryCache.TryGetValue("LlmFallbackChain", out System.Collections.Generic.List<LlmProviderEntity> fallbackChain))
+            {
+                var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
+                if (activeCategory != null)
+                {
+                    fallbackChain = await _dbContext.LlmProviders
+                        .AsNoTracking()
+                        .Where(p => p.ProviderName == activeCategory && p.IsActive)
+                        .OrderBy(p => p.PriorityOrder)
+                        .ToListAsync(cancellationToken);
+
+                    _memoryCache.Set("LlmFallbackChain", fallbackChain, TimeSpan.FromMinutes(5));
+                }
+            }
+            return fallbackChain;
+        }
+
+        private async Task<string> GetUserProfileContextAsync(string userId, System.Threading.CancellationToken cancellationToken)
+        {
+            var cats = await _dbContext.Cats.Where(c => c.UserId == userId).ToListAsync(cancellationToken);
+            if (!cats.Any()) return null;
+            var catProfiles = cats.Select(c => $"Name: {c.Name}, Allergies: {(c.Allergies != null && c.Allergies.Any() ? string.Join(", ", c.Allergies) : "None")}").ToList();
+            return $"Cats: {string.Join("; ", catProfiles)}";
+        }
+
+        private async Task<VlmResponseContract> PersonalizeAsync(VlmResponseContract genericResult, string userProfileContext, string language, System.Collections.Generic.List<LlmProviderEntity> fallbackChain, System.Threading.CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrEmpty(userProfileContext) || fallbackChain == null || !fallbackChain.Any())
+                return genericResult;
+
+            VlmResponseContract personalizedResult = null;
+            foreach (var providerEntity in fallbackChain)
+            {
+                var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
+                try
+                {
+                    personalizedResult = await _vlmService.PersonalizeAnalysisAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, genericResult, userProfileContext, language, cancellationToken);
+                    if (personalizedResult != null) break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} failed to personalize. Trying next backup...");
+                }
+            }
+            return personalizedResult ?? genericResult;
+        }
+
         [HttpGet("search")]
         [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ScanRatePolicy")]
         public async Task<IActionResult> Search([FromQuery] string query, System.Threading.CancellationToken cancellationToken)
@@ -50,51 +100,56 @@ namespace SaszetApp.Api.Controllers
             if (query.Length > 100) return BadRequest("Too long");
 
             var language = Request.Headers["Accept-Language"].ToString()?.Split(',').FirstOrDefault()?.Trim().ToLower() ?? "pl";
-            if (!language.StartsWith("en") && !language.StartsWith("pl"))
-            {
-                language = "pl";
-            }
+            if (!language.StartsWith("en") && !language.StartsWith("pl")) language = "pl";
             else if (language.StartsWith("en")) language = "en";
             else language = "pl";
 
             var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-            // Cache lookup
+            var fallbackChain = await GetFallbackChainAsync(cancellationToken);
+            var userProfileContext = await GetUserProfileContextAsync(userId, cancellationToken);
+
             var cachedEntity = await _dbContext.PetFoodItems
                 .Where(p => p.Language == language && (p.EanCode == query || p.ProductName.ToLower() == query.ToLower()) && p.UserId == userId)
                 .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
+            VlmResponseContract genericResult = null;
+            Guid? entityId = cachedEntity?.Id;
+            string entityEanCode = cachedEntity?.EanCode;
+
+            bool chargedForPersonalizationOnly = false;
+            UserScanUsageEntity usageEntity = null;
+
             if (cachedEntity != null)
             {
-                return Ok(_mapper.MapToModel(cachedEntity));
-            }
-
-            // Fallback to VLM
-            var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
-            if (usageEntity == null)
-            {
-                return StatusCode(429, new { message = "You have reached your scan limit." });
-            }
-
-            PetFoodItemEntity newEntity;
-            bool llmCallCompleted = false;
-            try
-            {
-                if (!_memoryCache.TryGetValue("LlmFallbackChain", out System.Collections.Generic.List<LlmProviderEntity> fallbackChain))
+                genericResult = new VlmResponseContract 
                 {
-                    var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
-                    if (activeCategory != null)
+                    ProductName = cachedEntity.ProductName,
+                    Rating = cachedEntity.Rating,
+                    Pros = cachedEntity.Pros,
+                    Cons = cachedEntity.Cons,
+                    Summary = cachedEntity.Summary,
+                    ExtractedIngredients = cachedEntity.ExtractedIngredients
+                };
+                
+                if (!string.IsNullOrEmpty(userProfileContext) && fallbackChain != null && fallbackChain.Any())
+                {
+                    usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+                    if (usageEntity == null)
                     {
-                        fallbackChain = await _dbContext.LlmProviders
-                            .AsNoTracking()
-                            .Where(p => p.ProviderName == activeCategory && p.IsActive)
-                            .OrderBy(p => p.PriorityOrder)
-                            .ToListAsync(cancellationToken);
-
-                        _memoryCache.Set("LlmFallbackChain", fallbackChain, TimeSpan.FromMinutes(5));
+                        return StatusCode(429, new { message = "You have reached your scan limit." });
                     }
+                    chargedForPersonalizationOnly = true;
+                }
+            }
+            else
+            {
+                usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
+                if (usageEntity == null)
+                {
+                    return StatusCode(429, new { message = "You have reached your scan limit." });
                 }
 
                 if (fallbackChain == null || !fallbackChain.Any())
@@ -104,69 +159,96 @@ namespace SaszetApp.Api.Controllers
                     return StatusCode(503, new { message = "No active keys or primary LLM provider configured." });
                 }
 
-                VlmResponseContract result = null;
+                bool llmCallCompleted = false;
                 Exception lastException = null;
 
-                foreach (var providerEntity in fallbackChain)
+                try
                 {
-                    var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
-                    try
+                    foreach (var providerEntity in fallbackChain)
                     {
-                        result = await _vlmService.AnalyzeProductAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, query, language, cancellationToken);
-                        llmCallCompleted = true;
-                        break;
+                        var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
+                        try
+                        {
+                            genericResult = await _vlmService.AnalyzeProductAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, query, language, cancellationToken);
+                            llmCallCompleted = true;
+                            break;
+                        }
+                        catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode >= System.Net.HttpStatusCode.BadRequest && ex.StatusCode < System.Net.HttpStatusCode.InternalServerError)
+                        {
+                            llmCallCompleted = true;
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            lastException = ex;
+                            _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} (Model: {providerEntity.ModelName}) failed. Trying next backup...");
+                        }
                     }
-                    catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode >= System.Net.HttpStatusCode.BadRequest && ex.StatusCode < System.Net.HttpStatusCode.InternalServerError)
+
+                    if (genericResult == null)
                     {
-                        llmCallCompleted = true;
-                        throw;
+                        throw new Exception("All LLM providers in the fallback chain failed.", lastException);
                     }
-                    catch (Exception ex)
+
+                    var newEntity = new PetFoodItemEntity
                     {
-                        lastException = ex;
-                        _logger.LogWarning(ex, $"Provider {providerEntity.ProviderName} (Model: {providerEntity.ModelName}) failed. Trying next backup...");
+                        Id = Guid.NewGuid(),
+                        UserId = userId,
+                        ProductName = genericResult.ProductName,
+                        Language = language,
+                        Rating = genericResult.Rating,
+                        Pros = genericResult.Pros,
+                        Cons = genericResult.Cons,
+                        Summary = genericResult.Summary,
+                        ExtractedIngredients = genericResult.ExtractedIngredients,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    if (query.All(char.IsDigit) && query.Length >= 8)
+                    {
+                        newEntity.EanCode = query;
                     }
+
+                    _dbContext.PetFoodItems.Add(newEntity);
+                    await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
+
+                    entityId = newEntity.Id;
+                    entityEanCode = newEntity.EanCode;
                 }
-
-                if (result == null)
+                catch (Exception ex)
                 {
-                    throw new Exception("All LLM providers in the fallback chain failed.", lastException);
+                    if (!llmCallCompleted)
+                    {
+                        await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                    }
+                    _logger.LogError(ex, "Error analyzing product.");
+                    return StatusCode(500, new { message = "Error analyzing product." });
                 }
-
-                newEntity = new PetFoodItemEntity
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    ProductName = result.ProductName,
-                    Language = language,
-                    Rating = result.Rating,
-                    Pros = result.Pros,
-                    Cons = result.Cons,
-                    Summary = result.Summary,
-                    ExtractedIngredients = result.ExtractedIngredients,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                if (query.All(char.IsDigit) && query.Length >= 8)
-                {
-                    newEntity.EanCode = query;
-                }
-
-                _dbContext.PetFoodItems.Add(newEntity);
-                await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
-
-                return Ok(_mapper.MapToModel(newEntity));
             }
-            catch (Exception ex)
+
+            var finalResult = await PersonalizeAsync(genericResult, userProfileContext, language, fallbackChain, cancellationToken);
+
+            if (chargedForPersonalizationOnly && Object.ReferenceEquals(finalResult, genericResult))
             {
-                if (!llmCallCompleted)
-                {
-                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
-                }
-                _logger.LogError(ex, "Error analyzing product.");
-                return StatusCode(500, new { message = "Error analyzing product." });
+                await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
             }
+
+            var model = new PetFoodItem
+            {
+                Id = entityId ?? Guid.NewGuid(),
+                ProductName = finalResult.ProductName,
+                Language = language,
+                Rating = finalResult.Rating,
+                Pros = finalResult.Pros,
+                Cons = finalResult.Cons,
+                Summary = finalResult.Summary,
+                ExtractedIngredients = finalResult.ExtractedIngredients,
+                EanCode = entityEanCode
+            };
+
+            return Ok(model);
         }
+
         [HttpPost("analyze-image")]
         [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ScanRatePolicy")]
         [RequestSizeLimit(5 * 1024 * 1024)]
@@ -187,10 +269,20 @@ namespace SaszetApp.Api.Controllers
             else if (language.StartsWith("en")) language = "en";
             else language = "pl";
 
+            var fallbackChain = await GetFallbackChainAsync(cancellationToken);
+            var userProfileContext = await GetUserProfileContextAsync(userId, cancellationToken);
+
             var usageEntity = await _scanQuotaService.CheckAndRecordUsageAsync(userId, cancellationToken);
             if (usageEntity == null)
             {
                 return StatusCode(429, new { message = "You have reached your scan limit." });
+            }
+
+            if (fallbackChain == null || !fallbackChain.Any())
+            {
+                await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
+                _logger.LogWarning("No active keys for the selected LLM provider or provider is missing.");
+                return StatusCode(503, new { message = "No active keys or primary LLM provider configured." });
             }
 
             string base64Image;
@@ -214,7 +306,7 @@ namespace SaszetApp.Api.Controllers
                         if (skBitmap == null) throw new Exception("Failed to decode image");
                         
                         using var skImage = SKImage.FromBitmap(skBitmap);
-                        using var data = skImage.Encode(SKEncodedImageFormat.Jpeg, 85); // EXIF is stripped
+                        using var data = skImage.Encode(SKEncodedImageFormat.Jpeg, 85);
                         if (data != null)
                         {
                             data.SaveTo(memoryStream);
@@ -234,33 +326,10 @@ namespace SaszetApp.Api.Controllers
                 base64Image = Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
             }
 
-            PetFoodItemEntity newEntity;
+            VlmResponseContract genericResult = null;
             bool llmCallCompleted = false;
             try
             {
-                if (!_memoryCache.TryGetValue("LlmFallbackChain", out System.Collections.Generic.List<LlmProviderEntity> fallbackChain))
-                {
-                    var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
-                    if (activeCategory != null)
-                    {
-                        fallbackChain = await _dbContext.LlmProviders
-                            .AsNoTracking()
-                            .Where(p => p.ProviderName == activeCategory && p.IsActive)
-                            .OrderBy(p => p.PriorityOrder)
-                            .ToListAsync(cancellationToken);
-
-                        _memoryCache.Set("LlmFallbackChain", fallbackChain, TimeSpan.FromMinutes(5));
-                    }
-                }
-
-                if (fallbackChain == null || !fallbackChain.Any())
-                {
-                    await _scanQuotaService.RefundUsageAsync(usageEntity, System.Threading.CancellationToken.None);
-                    _logger.LogWarning("No active keys for the selected LLM provider or provider is missing.");
-                    return StatusCode(503, new { message = "No active keys or primary LLM provider configured." });
-                }
-
-                VlmResponseContract result = null;
                 Exception lastException = null;
 
                 foreach (var providerEntity in fallbackChain)
@@ -268,14 +337,14 @@ namespace SaszetApp.Api.Controllers
                     var apiKey = _encryptionService.Decrypt(providerEntity.EncryptedApiKey);
                     try
                     {
-                        result = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, "image/jpeg", language, cancellationToken);
+                        genericResult = await _vlmService.AnalyzeImageAsync(providerEntity.ProviderName, providerEntity.ModelName, apiKey, base64Image, "image/jpeg", language, cancellationToken);
                         llmCallCompleted = true;
                         break;
                     }
                     catch (InvalidOperationException ex) when (ex.Message == "NO_PET_FOOD_FOUND")
                     {
                         llmCallCompleted = true;
-                        throw; // Don't fallback if it's a valid "not food" response
+                        throw;
                     }
                     catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode >= System.Net.HttpStatusCode.BadRequest && ex.StatusCode < System.Net.HttpStatusCode.InternalServerError)
                     {
@@ -289,29 +358,43 @@ namespace SaszetApp.Api.Controllers
                     }
                 }
 
-                if (result == null)
+                if (genericResult == null)
                 {
                     throw new Exception("All LLM providers in the fallback chain failed.", lastException);
                 }
 
-                newEntity = new PetFoodItemEntity
+                var newEntity = new PetFoodItemEntity
                 {
                     Id = Guid.NewGuid(),
                     UserId = userId,
-                    ProductName = result.ProductName,
+                    ProductName = genericResult.ProductName,
                     Language = language,
-                    Rating = result.Rating,
-                    Pros = result.Pros,
-                    Cons = result.Cons,
-                    Summary = result.Summary,
-                    ExtractedIngredients = result.ExtractedIngredients,
+                    Rating = genericResult.Rating,
+                    Pros = genericResult.Pros,
+                    Cons = genericResult.Cons,
+                    Summary = genericResult.Summary,
+                    ExtractedIngredients = genericResult.ExtractedIngredients,
                     CreatedAt = DateTime.UtcNow
                 };
 
                 _dbContext.PetFoodItems.Add(newEntity);
                 await _dbContext.SaveChangesAsync(System.Threading.CancellationToken.None);
 
-                return Ok(_mapper.MapToModel(newEntity));
+                var finalResult = await PersonalizeAsync(genericResult, userProfileContext, language, fallbackChain, cancellationToken);
+
+                var model = new PetFoodItem
+                {
+                    Id = newEntity.Id,
+                    ProductName = finalResult.ProductName,
+                    Language = language,
+                    Rating = finalResult.Rating,
+                    Pros = finalResult.Pros,
+                    Cons = finalResult.Cons,
+                    Summary = finalResult.Summary,
+                    ExtractedIngredients = finalResult.ExtractedIngredients
+                };
+
+                return Ok(model);
             }
             catch (InvalidOperationException ex) when (ex.Message == "NO_PET_FOOD_FOUND")
             {
@@ -331,9 +414,10 @@ namespace SaszetApp.Api.Controllers
                 return StatusCode(500, new { message = "Error analyzing image." });
             }
         }
+
         [HttpPost("compare")]
         [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("ScanRatePolicy")]
-        [RequestSizeLimit(25 * 1024 * 1024)] // 25MB total limit for up to 5 images
+        [RequestSizeLimit(25 * 1024 * 1024)]
         [RequestFormLimits(MultipartBodyLengthLimit = 26214400)]
         public async Task<IActionResult> Compare([FromForm] System.Collections.Generic.List<IFormFile> images, System.Threading.CancellationToken cancellationToken)
         {
@@ -348,6 +432,14 @@ namespace SaszetApp.Api.Controllers
             var allowedMimeTypes = new[] { "image/jpeg", "image/png", "image/webp" };
             var base64Images = new System.Collections.Generic.List<string>();
 
+            var language = Request.Headers["Accept-Language"].ToString()?.Split(',').FirstOrDefault()?.Trim().ToLower() ?? "pl";
+            if (!language.StartsWith("en") && !language.StartsWith("pl")) language = "pl";
+            else if (language.StartsWith("en")) language = "en";
+            else language = "pl";
+
+            var fallbackChain = await GetFallbackChainAsync(cancellationToken);
+            var userProfileContext = await GetUserProfileContextAsync(userId, cancellationToken);
+
             var usageEntities = new System.Collections.Generic.List<UserScanUsageEntity>();
             for (int i = 0; i < images.Count; i++)
             {
@@ -361,6 +453,15 @@ namespace SaszetApp.Api.Controllers
                     return StatusCode(429, new { message = "You have reached your scan limit." });
                 }
                 usageEntities.Add(usage);
+            }
+
+            if (fallbackChain == null || !fallbackChain.Any())
+            {
+                foreach (var u in usageEntities)
+                {
+                    await _scanQuotaService.RefundUsageAsync(u, System.Threading.CancellationToken.None);
+                }
+                return StatusCode(503, new { message = "No active keys or primary LLM provider configured." });
             }
 
             try
@@ -408,38 +509,9 @@ namespace SaszetApp.Api.Controllers
                 return BadRequest("Invalid image file(s).");
             }
 
-            var language = Request.Headers["Accept-Language"].ToString()?.Split(',').FirstOrDefault()?.Trim().ToLower() ?? "pl";
-            if (!language.StartsWith("en") && !language.StartsWith("pl")) language = "pl";
-            else if (language.StartsWith("en")) language = "en";
-            else language = "pl";
-
             bool llmCallCompleted = false;
             try
             {
-                if (!_memoryCache.TryGetValue("LlmFallbackChain", out System.Collections.Generic.List<LlmProviderEntity> fallbackChain))
-                {
-                    var activeCategory = await _dbContext.LlmProviders.Where(p => p.IsPrimary).Select(p => p.ProviderName).FirstOrDefaultAsync(cancellationToken);
-                    if (activeCategory != null)
-                    {
-                        fallbackChain = await _dbContext.LlmProviders
-                            .AsNoTracking()
-                            .Where(p => p.ProviderName == activeCategory && p.IsActive)
-                            .OrderBy(p => p.PriorityOrder)
-                            .ToListAsync(cancellationToken);
-
-                        _memoryCache.Set("LlmFallbackChain", fallbackChain, TimeSpan.FromMinutes(5));
-                    }
-                }
-
-                if (fallbackChain == null || !fallbackChain.Any())
-                {
-                    foreach (var u in usageEntities)
-                    {
-                        await _scanQuotaService.RefundUsageAsync(u, System.Threading.CancellationToken.None);
-                    }
-                    return StatusCode(503, new { message = "No active keys or primary LLM provider configured." });
-                }
-
                 MultiVlmResponseContract result = null;
                 Exception lastException = null;
 
@@ -479,16 +551,18 @@ namespace SaszetApp.Api.Controllers
                         if (prod == null || string.IsNullOrWhiteSpace(prod.ProductName))
                             continue;
 
+                        var finalProd = await PersonalizeAsync(prod, userProfileContext, language, fallbackChain, cancellationToken);
+
                         var model = new PetFoodItem
                         {
                             Id = Guid.NewGuid(),
-                            ProductName = prod.ProductName,
+                            ProductName = finalProd.ProductName,
                             Language = language,
-                            Rating = prod.Rating,
-                            Pros = prod.Pros,
-                            Cons = prod.Cons,
-                            Summary = prod.Summary,
-                            ExtractedIngredients = prod.ExtractedIngredients
+                            Rating = finalProd.Rating,
+                            Pros = finalProd.Pros,
+                            Cons = finalProd.Cons,
+                            Summary = finalProd.Summary,
+                            ExtractedIngredients = finalProd.ExtractedIngredients
                         };
                         models.Add(model);
                     }
