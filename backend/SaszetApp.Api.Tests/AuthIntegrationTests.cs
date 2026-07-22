@@ -29,5 +29,13 @@ namespace SaszetApp.Api.Tests
             var response = await client.GetAsync("/api/Scan/search?query=123");
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
+
+        [Fact]
+        public async Task ProfileEndpoint_ReturnsUnauthorized_WhenNoToken()
+        {
+            var client = _factory.CreateClient();
+            var response = await client.GetAsync("/api/Profile");
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
     }
 }
