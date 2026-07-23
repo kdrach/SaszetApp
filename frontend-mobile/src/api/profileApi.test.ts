@@ -6,7 +6,8 @@ vi.mock('./axios', () => ({
   default: {
     get: vi.fn(),
     post: vi.fn(),
-    delete: vi.fn()
+    delete: vi.fn(),
+    put: vi.fn()
   }
 }));
 
@@ -39,5 +40,16 @@ describe('profileApi', () => {
 
     await profileApi.deleteCat('c1');
     expect(apiClient.delete).toHaveBeenCalledWith('/Profile/cats/c1');
+  });
+
+  it('updateCat calls PUT /Profile/cats/:id', async () => {
+    const mockCat = { id: 'c1', name: 'Kitty 2', breed: 'Mixed', weight: 5, allergies: ['fish'] };
+    vi.mocked(apiClient.put).mockResolvedValueOnce({ data: mockCat });
+    
+    const dto = { name: 'Kitty 2', breed: 'Mixed', weight: 5, allergies: ['fish'] };
+    const result = await profileApi.updateCat('c1', dto);
+    
+    expect(apiClient.put).toHaveBeenCalledWith('/Profile/cats/c1', dto);
+    expect(result).toEqual(mockCat);
   });
 });

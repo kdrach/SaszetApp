@@ -19,7 +19,8 @@ vi.mock('../api/profileApi', () => ({
   profileApi: {
     getProfile: vi.fn(),
     addCat: vi.fn(),
-    deleteCat: vi.fn()
+    deleteCat: vi.fn(),
+    updateCat: vi.fn()
   }
 }));
 
@@ -190,6 +191,45 @@ describe('ProfileView', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Delete error')).toBeInTheDocument();
+    });
+  });
+
+  it('edits a cat successfully', async () => {
+    (profileApi.getProfile as any).mockResolvedValue(mockProfile);
+    const updatedCat = { id: 'cat-1', name: 'Mruczek Updated', breed: 'Dachowiec', weight: 5, allergies: ['ryby'] };
+    (profileApi.updateCat as any).mockResolvedValue(updatedCat);
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <ProfileView />
+      </I18nextProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Mruczek')).toBeInTheDocument();
+    });
+
+    const editButton = screen.getByTestId('edit-cat-button');
+    fireEvent.click(editButton);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Mruczek')).toBeInTheDocument();
+    });
+
+    const inputs = screen.getAllByRole('textbox');
+    fireEvent.change(inputs[0], { target: { value: 'Mruczek Updated' } }); // name
+
+    const saveButtons = screen.getAllByText('save');
+    fireEvent.click(saveButtons[saveButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(profileApi.updateCat).toHaveBeenCalledWith('cat-1', {
+        name: 'Mruczek Updated',
+        breed: 'Dachowiec',
+        weight: 4.5,
+        allergies: []
+      });
+      expect(screen.getByText('Mruczek Updated')).toBeInTheDocument();
     });
   });
 });
