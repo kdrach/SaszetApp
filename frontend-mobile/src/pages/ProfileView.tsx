@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { profileApi, UserProfile, CatCreateDto } from '../api/profileApi';
+import { profileApi, UserProfile, CatCreateDto, Cat } from '../api/profileApi';
 import { Trash2, Plus, X, Loader2, Pencil } from 'lucide-react';
 
 const WARNING_THRESHOLD_PERCENTAGE = 20;
@@ -84,7 +84,7 @@ const ProfileView: React.FC = () => {
     }
   };
 
-  const openEditModal = (cat: any) => {
+  const openEditModal = (cat: Cat) => {
     setEditingCatId(cat.id);
     setNewCat({
       name: cat.name,
