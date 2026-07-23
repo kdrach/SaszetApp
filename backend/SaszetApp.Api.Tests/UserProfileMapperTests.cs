@@ -68,11 +68,12 @@ namespace SaszetApp.Api.Tests
             };
 
             // Act
-            var model = _mapper.MapToUser(userEntity, 10); // 10 remaining scans
+            var model = _mapper.MapToUser(userEntity, 10, 20); // 10 remaining scans, 20 limit
 
             // Assert
             Assert.Equal(userEntity.Id, model.Id);
             Assert.Equal(10, model.RemainingScans);
+            Assert.Equal(20, model.MaxScans);
             Assert.Single(model.Cats);
             Assert.Equal(catEntity.Name, model.Cats[0].Name);
         }

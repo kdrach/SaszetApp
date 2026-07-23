@@ -8,6 +8,6 @@ namespace SaszetApp.Api.Services
     {
         Task<UserScanUsageEntity?> CheckAndRecordUsageAsync(string userId, CancellationToken cancellationToken = default);
         Task RefundUsageAsync(UserScanUsageEntity entity, CancellationToken cancellationToken = default);
-        Task<int> GetRemainingScansAsync(string userId, CancellationToken cancellationToken = default);
+        Task<(int Remaining, int Limit)> GetQuotaStatusAsync(string userId, CancellationToken cancellationToken = default);
     }
 }

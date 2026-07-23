@@ -36,3 +36,7 @@
 
 - **Bug Fixes (Camera)**:
   - Fixed concurrent camera initialization race conditions caused by React StrictMode and prevented double UI error overlays on denied permissions in ScannerView.
+
+- **Scan Quota Fix**:
+  - Updated `profileApi.ts` to expect `maxScans` from backend.
+  - Removed hardcoded limit in `ProfileView` and replaced with dynamic backend limit calculation for progress bar and texts.

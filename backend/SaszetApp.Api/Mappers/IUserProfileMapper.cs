@@ -6,6 +6,6 @@ namespace SaszetApp.Api.Mappers
     public interface IUserProfileMapper
     {
         Cat MapToCat(CatEntity entity);
-        User MapToUser(UserEntity entity, int remainingScans);
+        User MapToUser(UserEntity entity, int remainingScans, int maxScans);
     }
 }

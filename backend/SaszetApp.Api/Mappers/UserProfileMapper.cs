@@ -21,7 +21,7 @@ namespace SaszetApp.Api.Mappers
             };
         }
 
-        public User MapToUser(UserEntity entity, int remainingScans)
+        public User MapToUser(UserEntity entity, int remainingScans, int maxScans)
         {
             if (entity == null) throw new System.ArgumentNullException(nameof(entity));
 
@@ -29,6 +29,7 @@ namespace SaszetApp.Api.Mappers
             {
                 Id = entity.Id,
                 RemainingScans = remainingScans,
+                MaxScans = maxScans,
                 Cats = entity.Cats?.Select(MapToCat).ToList() ?? new System.Collections.Generic.List<Cat>()
             };
         }

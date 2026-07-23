@@ -199,7 +199,7 @@ namespace SaszetApp.Api.Services
             return (limit, rollingDays);
         }
 
-        public async Task<int> GetRemainingScansAsync(string userId, CancellationToken cancellationToken = default)
+        public async Task<(int Remaining, int Limit)> GetQuotaStatusAsync(string userId, CancellationToken cancellationToken = default)
         {
             using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
@@ -218,7 +218,7 @@ namespace SaszetApp.Api.Services
                 .CountAsync(cancellationToken);
 
             var remaining = limit - usageCount;
-            return remaining < 0 ? 0 : remaining;
+            return (remaining < 0 ? 0 : remaining, limit);
         }
     }
 }
