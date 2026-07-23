@@ -124,5 +124,23 @@ namespace SaszetApp.Api.Services
 
             return true;
         }
+
+        public async Task<Cat> UpdateCatAsync(string userId, Guid catId, CatUpdateDto dto, CancellationToken cancellationToken)
+        {
+            var cat = await _dbContext.Cats.FirstOrDefaultAsync(c => c.Id == catId && c.UserId == userId, cancellationToken);
+            if (cat == null)
+            {
+                throw new KeyNotFoundException("Cat not found or doesn't belong to the user.");
+            }
+
+            cat.Name = dto.Name;
+            cat.Breed = dto.Breed;
+            cat.Weight = dto.Weight;
+            cat.Allergies = dto.Allergies ?? new System.Collections.Generic.List<string>();
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return _mapper.MapToCat(cat);
+        }
     }
 }
