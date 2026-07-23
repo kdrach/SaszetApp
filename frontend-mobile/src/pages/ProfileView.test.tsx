@@ -32,7 +32,7 @@ describe('ProfileView', () => {
     id: 'user-1',
     remainingScans: 3,
     cats: [
-      { id: 'cat-1', name: 'Mruczek', breed: 'Dachowiec', weight: 4.5, allergies: '' }
+      { id: 'cat-1', name: 'Mruczek', breed: 'Dachowiec', weight: 4.5, allergies: [] }
     ]
   };
 
@@ -75,7 +75,7 @@ describe('ProfileView', () => {
 
   it('adds a cat successfully', async () => {
     (profileApi.getProfile as any).mockResolvedValue({ ...mockProfile, cats: [] });
-    const newCat = { id: 'cat-2', name: 'Filemon', breed: 'Pers', weight: 3.2, allergies: 'Chicken' };
+    const newCat = { id: 'cat-2', name: 'Filemon', breed: 'Pers', weight: 3.2, allergies: ['Chicken'] };
     (profileApi.addCat as any).mockResolvedValue(newCat);
 
     render(
@@ -112,7 +112,7 @@ describe('ProfileView', () => {
         name: 'Filemon',
         breed: 'Pers',
         weight: 3.2,
-        allergies: 'Chicken'
+        allergies: ['Chicken']
       });
       expect(screen.getByText('Filemon')).toBeInTheDocument();
     });

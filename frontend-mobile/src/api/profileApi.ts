@@ -5,14 +5,14 @@ export interface Cat {
   name: string;
   breed: string;
   weight: number;
-  allergies: string;
+  allergies: string[];
 }
 
 export interface CatCreateDto {
   name: string;
   breed: string;
   weight: number;
-  allergies: string;
+  allergies: string[];
 }
 
 export interface UserProfile {
