@@ -25,10 +25,10 @@ describe('profileApi', () => {
   });
 
   it('addCat calls POST /Profile/cats', async () => {
-    const mockCat = { id: 'c1', name: 'Kitty', breed: 'Mixed', weight: 4, allergies: '' };
-    (apiClient.post as any).mockResolvedValue({ data: mockCat });
+    const mockCat = { id: 'c1', name: 'Kitty', breed: 'Mixed', weight: 4, allergies: [] };
 
-    const dto = { name: 'Kitty', breed: 'Mixed', weight: 4, allergies: '' };
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ data: mockCat });
+    const dto = { name: 'Kitty', breed: 'Mixed', weight: 4, allergies: [] };
     const result = await profileApi.addCat(dto);
     expect(apiClient.post).toHaveBeenCalledWith('/Profile/cats', dto);
     expect(result).toEqual(mockCat);

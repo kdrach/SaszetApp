@@ -19,7 +19,7 @@ const ProfileView: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [newCat, setNewCat] = useState<CatCreateDto>({
+  const [newCat, setNewCat] = useState({
     name: '',
     breed: '',
     weight: 0,
@@ -49,7 +49,13 @@ const ProfileView: React.FC = () => {
     setIsAdding(true);
     setError(null);
     try {
-      const addedCat = await profileApi.addCat(newCat);
+      const dto: CatCreateDto = {
+        name: newCat.name,
+        breed: newCat.breed,
+        weight: newCat.weight,
+        allergies: newCat.allergies.split(',').map(a => a.trim()).filter(a => a.length > 0)
+      };
+      const addedCat = await profileApi.addCat(dto);
       if (profile) {
         setProfile({
           ...profile,
@@ -153,9 +159,9 @@ const ProfileView: React.FC = () => {
                 <p className="text-sm text-gray-500 mt-1">
                   {t('breed')}: <span className="text-gray-700">{cat.breed}</span> &bull; {t('weight')}: <span className="text-gray-700">{cat.weight}</span>
                 </p>
-                {cat.allergies && (
+                {cat.allergies && cat.allergies.length > 0 && (
                   <p className="text-sm text-gray-500 mt-0.5">
-                    {t('allergies')}: <span className="text-red-500 font-medium">{cat.allergies}</span>
+                    {t('allergies')}: <span className="text-red-500 font-medium">{cat.allergies.join(', ')}</span>
                   </p>
                 )}
               </div>
