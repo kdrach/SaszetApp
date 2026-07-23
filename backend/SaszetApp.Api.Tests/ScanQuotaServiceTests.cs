@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using SaszetApp.Api.Data;
 using SaszetApp.Api.Services;
+using SaszetApp.Api.Models;
 
 namespace SaszetApp.Api.Tests
 {
@@ -113,6 +114,22 @@ namespace SaszetApp.Api.Tests
             var usages = await verifyContext.UserScanUsages.CountAsync(u => u.UserId == userId);
             
             Assert.Equal(5, usages);
+        }
+        [Fact]
+        public async Task GetQuotaStatusAsync_ReturnsCorrectStatus()
+        {
+            var userId = "user5";
+            _dbContext.SystemSettings.Add(new SystemSettingEntity { Key = "GlobalScanLimit", Value = "5" });
+            await _dbContext.SaveChangesAsync();
+
+            _dbContext.UserScanUsages.Add(new UserScanUsageEntity { Id = Guid.NewGuid(), UserId = userId, ScannedAt = DateTime.UtcNow });
+            _dbContext.UserScanUsages.Add(new UserScanUsageEntity { Id = Guid.NewGuid(), UserId = userId, ScannedAt = DateTime.UtcNow });
+            await _dbContext.SaveChangesAsync();
+
+            var status = await _scanQuotaService.GetQuotaStatusAsync(userId);
+            
+            Assert.Equal(5, status.Limit);
+            Assert.Equal(3, status.Remaining);
         }
     }
 }

@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { profileApi, UserProfile, CatCreateDto } from '../api/profileApi';
 import { Trash2, Plus, X, Loader2 } from 'lucide-react';
 
-const MAX_SCANS = 5;
 const WARNING_THRESHOLD_PERCENTAGE = 20;
 
 const getProgressBarClass = (isWarning: boolean) => {
@@ -113,7 +112,8 @@ const ProfileView: React.FC = () => {
 
   if (!profile) return null;
 
-  const scansPercentage = Math.max(0, Math.min(100, (profile.remainingScans / MAX_SCANS) * 100));
+  const maxScansSafe = profile.maxScans > 0 ? profile.maxScans : 1;
+  const scansPercentage = Math.max(0, Math.min(100, (profile.remainingScans / maxScansSafe) * 100));
   const isWarningState = scansPercentage <= WARNING_THRESHOLD_PERCENTAGE;
   const progressBarClass = getProgressBarClass(isWarningState);
 
@@ -136,7 +136,7 @@ const ProfileView: React.FC = () => {
         </h2>
         <div className="flex items-end gap-2 mb-4">
           <span className="text-5xl font-black text-gray-900">{profile.remainingScans}</span>
-          <span className="text-xl font-medium text-gray-400 mb-1">/ {MAX_SCANS}</span>
+          <span className="text-xl font-medium text-gray-400 mb-1">/ {profile.maxScans}</span>
         </div>
         
         {/* Progress Bar */}

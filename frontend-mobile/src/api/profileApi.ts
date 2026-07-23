@@ -18,6 +18,7 @@ export interface CatCreateDto {
 export interface UserProfile {
   id: string;
   remainingScans: number;
+  maxScans: number;
   cats: Cat[];
 }
 

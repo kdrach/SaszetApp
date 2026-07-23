@@ -44,3 +44,7 @@ This is a standard .NET 10.0 ASP.NET Core Web API project using Controllers and 
 - **User Profile Epic (API Endpoints)**:
   - Added `ProfileController` with endpoints to GET profile (with cats and `RemainingScans`), POST a new cat, and DELETE a cat.
   - Extended `IScanQuotaService` with `GetRemainingScansAsync` to calculate quota without burning it.
+
+- **Scan Quota Fix**:
+  - Updated `IScanQuotaService` to return tuple `(Remaining, Limit)` instead of just `Remaining` to support dynamic user limits on frontend.
+  - Added `MaxScans` property to `User` domain model and updated `UserProfileMapper` (TDD).

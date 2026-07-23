@@ -44,6 +44,7 @@ namespace SaszetApp.Api.Tests
             var userProfile = new User
             {
                 Id = "user123",
+                MaxScans = 10,
                 RemainingScans = 3,
                 Cats = new List<Cat>
                 {
@@ -61,6 +62,7 @@ namespace SaszetApp.Api.Tests
             var okResult = Assert.IsType<OkObjectResult>(result);
             var user = Assert.IsType<User>(okResult.Value);
             Assert.Equal("user123", user.Id);
+            Assert.Equal(10, user.MaxScans);
             Assert.Equal(3, user.RemainingScans);
             Assert.Single(user.Cats);
             Assert.Equal("Filemon", user.Cats[0].Name);

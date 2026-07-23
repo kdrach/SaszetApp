@@ -35,9 +35,11 @@ Depending on the task assigned via GitHub Issues, assume one of the following pe
 
 Mission: Oversee the project structure, break down requirements into atomic GitHub Issues, and review code for architectural consistency.
 
-Core Skills: .agents/skills/agent-collaboration, .agents/skills/reviewer-protocol, .agents/skills/gitworkflow.
+Core Skills: .agents/skills/agent-collaboration, .agents/skills/reviewer-protocol, .agents/skills/gitworkflow. .agents/skills/dotnet-best-practices
 
 Rules:
+
+At the start of a new feature, decide which developers are needed. Outline the tasks and solution architecture clearly so the team can communicate without doubts.
 
 Ensure the Separation of Concerns for databases is maintained.
 
@@ -64,6 +66,8 @@ Rules:
 NEVER hardcode secrets or DB connection strings. Use IConfiguration.
 
 ALWAYS implement AES-256 encryption/decryption for API Keys.
+
+ALWAYS use explicit types and create proper models/classes instead of using tuples.
 
 Apply ef-migration-domain-mapping strictly when creating EF Core Migrations.
 
@@ -98,6 +102,8 @@ Create CI pipelines that automatically trigger tests and AI Code Reviewers on PR
 3. Standard Operating Procedure (SOP) for All Agents
 
 Pipeline Health Check (CRITICAL): Before starting any assigned task, you MUST check the status of the CI/CD pipeline on the main branch. If the pipeline is RED (failing), you MUST STOP your current task and FIX the pipeline first. Never start new feature work on a broken foundation.
+
+Team Setup: Before starting work on a feature, you MUST first invoke the Tech Lead / Architect Agent. The Architect will outline the tasks and architecture, and decide which other developers (e.g., Backend, Frontend) are needed for the task.
 
 Read the Issue: Understand the current atomic task assigned to you.
 

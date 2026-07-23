@@ -49,9 +49,9 @@ namespace SaszetApp.Api.Services
                 }
             }
 
-            var remainingScans = await _scanQuotaService.GetRemainingScansAsync(userId, cancellationToken);
+            var quotaStatus = await _scanQuotaService.GetQuotaStatusAsync(userId, cancellationToken);
 
-            return _mapper.MapToUser(userEntity!, remainingScans);
+            return _mapper.MapToUser(userEntity!, quotaStatus.Remaining, quotaStatus.Limit);
         }
 
         public async Task<Cat> AddCatAsync(string userId, CatCreateDto dto, CancellationToken cancellationToken)
