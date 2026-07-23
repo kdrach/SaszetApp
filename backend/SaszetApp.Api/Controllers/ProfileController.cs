@@ -41,7 +41,7 @@ namespace SaszetApp.Api.Controllers
             try
             {
                 var catModel = await _userProfileService.AddCatAsync(userId, dto, cancellationToken);
-                return CreatedAtAction(nameof(GetProfileAsync), null, catModel);
+                return CreatedAtAction("GetProfile", null, catModel);
             }
             catch (InvalidOperationException ex) when (ex.Message == "Maximum number of cats reached.")
             {
