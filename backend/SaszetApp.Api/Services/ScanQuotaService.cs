@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using SaszetApp.Api.Data;
+using SaszetApp.Api.Models;
 
 namespace SaszetApp.Api.Services
 {
@@ -199,7 +200,7 @@ namespace SaszetApp.Api.Services
             return (limit, rollingDays);
         }
 
-        public async Task<(int Remaining, int Limit)> GetQuotaStatusAsync(string userId, CancellationToken cancellationToken = default)
+        public async Task<ScanQuotaStatus> GetQuotaStatusAsync(string userId, CancellationToken cancellationToken = default)
         {
             using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
@@ -218,7 +219,7 @@ namespace SaszetApp.Api.Services
                 .CountAsync(cancellationToken);
 
             var remaining = limit - usageCount;
-            return (remaining < 0 ? 0 : remaining, limit);
+            return new ScanQuotaStatus { Remaining = remaining < 0 ? 0 : remaining, Limit = limit };
         }
     }
 }
