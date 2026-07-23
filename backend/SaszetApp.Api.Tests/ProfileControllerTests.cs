@@ -155,5 +155,62 @@ namespace SaszetApp.Api.Tests
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
             Assert.Equal("Maximum number of cats reached.", badRequestResult.Value);
         }
+
+        [Fact]
+        public async Task UpdateCatAsync_UpdatesCatAndReturnsIt()
+        {
+            // Arrange
+            var catId = Guid.NewGuid();
+            var updateDto = new CatUpdateDto
+            {
+                Name = "Updated Name",
+                Breed = "Updated Breed",
+                Weight = 7.0m,
+                Allergies = new List<string> { "Fish" }
+            };
+
+            var updatedCat = new Cat
+            {
+                Id = catId,
+                Name = "Updated Name",
+                Breed = "Updated Breed",
+                Weight = 7.0m,
+                Allergies = new List<string> { "Fish" }
+            };
+
+            _mockUserProfileService.Setup(s => s.UpdateCatAsync("user123", catId, updateDto, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(updatedCat);
+
+            // Act
+            var result = await _controller.UpdateCatAsync(catId, updateDto, CancellationToken.None);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var cat = Assert.IsType<Cat>(okResult.Value);
+            Assert.Equal("Updated Name", cat.Name);
+            Assert.Equal(7.0m, cat.Weight);
+        }
+
+        [Fact]
+        public async Task UpdateCatAsync_ReturnsNotFound_WhenCatDoesNotExist()
+        {
+            // Arrange
+            var catId = Guid.NewGuid();
+            var updateDto = new CatUpdateDto
+            {
+                Name = "Updated Name",
+                Breed = "Updated Breed"
+            };
+
+            _mockUserProfileService.Setup(s => s.UpdateCatAsync("user123", catId, updateDto, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new KeyNotFoundException("Cat not found."));
+
+            // Act
+            var result = await _controller.UpdateCatAsync(catId, updateDto, CancellationToken.None);
+
+            // Assert
+            var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
+            Assert.Equal("Cat not found.", notFoundResult.Value);
+        }
     }
 }

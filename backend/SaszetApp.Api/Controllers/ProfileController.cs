@@ -49,6 +49,21 @@ namespace SaszetApp.Api.Controllers
             }
         }
 
+        [HttpPut("cats/{id}")]
+        public async Task<IActionResult> UpdateCatAsync(Guid id, [FromBody] CatUpdateDto dto, CancellationToken cancellationToken)
+        {
+            var userId = GetUserId();
+            try
+            {
+                var catModel = await _userProfileService.UpdateCatAsync(userId, id, dto, cancellationToken);
+                return Ok(catModel);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
+
         [HttpDelete("cats/{id}")]
         public async Task<IActionResult> DeleteCatAsync(Guid id, CancellationToken cancellationToken)
         {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { profileApi, UserProfile, CatCreateDto } from '../api/profileApi';
-import { Trash2, Plus, X, Loader2 } from 'lucide-react';
+import { profileApi, UserProfile, CatCreateDto, Cat } from '../api/profileApi';
+import { Trash2, Plus, X, Loader2, Pencil } from 'lucide-react';
 
 const WARNING_THRESHOLD_PERCENTAGE = 20;
 
@@ -18,6 +18,7 @@ const ProfileView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
 
   const [newCat, setNewCat] = useState({
     name: '',
@@ -43,7 +44,7 @@ const ProfileView: React.FC = () => {
     }
   };
 
-  const handleAddCat = async (e: React.FormEvent) => {
+  const handleAddOrEditCat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCat.name || !newCat.breed) return;
     setIsAdding(true);
@@ -55,21 +56,49 @@ const ProfileView: React.FC = () => {
         weight: newCat.weight,
         allergies: newCat.allergies.split(',').map(a => a.trim()).filter(a => a.length > 0)
       };
-      const addedCat = await profileApi.addCat(dto);
-      if (profile) {
-        setProfile({
-          ...profile,
-          cats: [...profile.cats, addedCat]
-        });
+
+      if (editingCatId) {
+        const updatedCat = await profileApi.updateCat(editingCatId, dto);
+        if (profile) {
+          setProfile({
+            ...profile,
+            cats: profile.cats.map(c => c.id === editingCatId ? updatedCat : c)
+          });
+        }
+      } else {
+        const addedCat = await profileApi.addCat(dto);
+        if (profile) {
+          setProfile({
+            ...profile,
+            cats: [...profile.cats, addedCat]
+          });
+        }
       }
-      setIsModalOpen(false);
-      setNewCat({ name: '', breed: '', weight: 0, allergies: '' });
+
+      closeModal();
     } catch (err: any) {
       console.error(err);
-      setError(err.message || t('errorAddCat'));
+      setError(err.message || (editingCatId ? t('errorEditCat') : t('errorAddCat')));
     } finally {
       setIsAdding(false);
     }
+  };
+
+  const openEditModal = (cat: Cat) => {
+    setEditingCatId(cat.id);
+    setNewCat({
+      name: cat.name,
+      breed: cat.breed,
+      weight: cat.weight,
+      allergies: cat.allergies ? cat.allergies.join(', ') : ''
+    });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingCatId(null);
+    setNewCat({ name: '', breed: '', weight: 0, allergies: '' });
   };
 
   const handleDeleteCat = async (id: string) => {
@@ -166,13 +195,22 @@ const ProfileView: React.FC = () => {
                   </p>
                 )}
               </div>
-              <button 
-                onClick={() => handleDeleteCat(cat.id)}
-                data-testid="delete-cat-button"
-                className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors active:scale-95"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => openEditModal(cat)}
+                  data-testid="edit-cat-button"
+                  className="p-3 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-full transition-colors active:scale-95"
+                >
+                  <Pencil className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => handleDeleteCat(cat.id)}
+                  data-testid="delete-cat-button"
+                  className="p-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors active:scale-95"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -185,7 +223,11 @@ const ProfileView: React.FC = () => {
       {/* Floating Add Button */}
       <div className="fixed bottom-24 left-0 right-0 px-4 flex justify-center z-10">
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setEditingCatId(null);
+            setNewCat({ name: '', breed: '', weight: 0, allergies: '' });
+            setIsModalOpen(true);
+          }}
           className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 rounded-full py-4 px-8 font-bold text-lg flex items-center gap-2 transform active:scale-95 transition-all w-full max-w-sm justify-center"
         >
           <Plus className="w-6 h-6" />
@@ -201,16 +243,16 @@ const ProfileView: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">{t('addCat')}</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{editingCatId ? t('editCat') : t('addCat')}</h2>
               <button 
-                onClick={() => setIsModalOpen(false)}
+                onClick={closeModal}
                 className="p-2 bg-gray-100 text-gray-500 rounded-full hover:bg-gray-200 active:scale-95 transition-all"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddCat} className="space-y-4">
+            <form onSubmit={handleAddOrEditCat} className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">{t('name')}</label>
                 <input 
@@ -259,7 +301,7 @@ const ProfileView: React.FC = () => {
               <div className="pt-4 flex gap-3">
                 <button 
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={closeModal}
                   className="flex-1 py-4 px-4 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 active:scale-95 transition-all"
                 >
                   {t('cancel')}

@@ -35,5 +35,10 @@ export const profileApi = {
 
   deleteCat: async (id: string): Promise<void> => {
     await apiClient.delete(`/Profile/cats/${id}`);
+  },
+
+  updateCat: async (id: string, dto: Omit<Cat, 'id'>): Promise<Cat> => {
+    const response = await apiClient.put<Cat>(`/Profile/cats/${id}`, dto);
+    return response.data;
   }
 };
