@@ -112,7 +112,8 @@ const ProfileView: React.FC = () => {
 
   if (!profile) return null;
 
-  const scansPercentage = Math.max(0, Math.min(100, (profile.remainingScans / profile.maxScans) * 100));
+  const maxScansSafe = profile.maxScans > 0 ? profile.maxScans : 1;
+  const scansPercentage = Math.max(0, Math.min(100, (profile.remainingScans / maxScansSafe) * 100));
   const isWarningState = scansPercentage <= WARNING_THRESHOLD_PERCENTAGE;
   const progressBarClass = getProgressBarClass(isWarningState);
 

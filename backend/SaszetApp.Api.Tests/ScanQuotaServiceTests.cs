@@ -114,5 +114,21 @@ namespace SaszetApp.Api.Tests
             
             Assert.Equal(5, usages);
         }
+        [Fact]
+        public async Task GetQuotaStatusAsync_ReturnsCorrectStatus()
+        {
+            var userId = "user5";
+            _dbContext.SystemSettings.Add(new SystemSettingEntity { Key = "GlobalScanLimit", Value = "5" });
+            await _dbContext.SaveChangesAsync();
+
+            _dbContext.UserScanUsages.Add(new UserScanUsageEntity { Id = Guid.NewGuid(), UserId = userId, ScannedAt = DateTime.UtcNow });
+            _dbContext.UserScanUsages.Add(new UserScanUsageEntity { Id = Guid.NewGuid(), UserId = userId, ScannedAt = DateTime.UtcNow });
+            await _dbContext.SaveChangesAsync();
+
+            var status = await _scanQuotaService.GetQuotaStatusAsync(userId);
+            
+            Assert.Equal(5, status.Limit);
+            Assert.Equal(3, status.Remaining);
+        }
     }
 }

@@ -35,7 +35,7 @@ Depending on the task assigned via GitHub Issues, assume one of the following pe
 
 Mission: Oversee the project structure, break down requirements into atomic GitHub Issues, and review code for architectural consistency.
 
-Core Skills: .agents/skills/agent-collaboration, .agents/skills/reviewer-protocol, .agents/skills/gitworkflow.
+Core Skills: .agents/skills/agent-collaboration, .agents/skills/reviewer-protocol, .agents/skills/gitworkflow. .agents/skills/dotnet-best-practices
 
 Rules:
 
